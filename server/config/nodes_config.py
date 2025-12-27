@@ -14,7 +14,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "시작 노드",
         "title": "시작",
         "description": "워크플로우의 시작점입니다.",
-        "script": "node-start.js",
+        "script": "boundarynodes/node-start.js",
         "is_boundary": True,
         "category": "system",
         "input_schema": {},
@@ -36,7 +36,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "이미지 터치 노드",
         "title": "이미지 터치",
         "description": "이미지를 찾아 터치하는 노드입니다.",
-        "script": "node-image-touch.js",
+        "script": "imagenodes/node-image-touch.js",
         "is_boundary": False,
         "category": "action",
         "requires_folder_path": True,
@@ -98,7 +98,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "대기 노드",
         "title": "대기 노드",
         "description": "일정 시간 대기하는 노드입니다.",
-        "script": "node-wait.js",
+        "script": "waitnodes/node-wait.js",
         "is_boundary": False,
         "category": "action",
         # 노드 레벨 파라미터
@@ -137,7 +137,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "화면 포커스",
         "title": "화면 포커스",
         "description": "선택한 프로세스의 창을 화면 최상단에 포커스합니다.",
-        "script": "node-process-focus.js",
+        "script": "processnodes/node-process-focus.js",
         "is_boundary": False,
         "category": "process",
         # 상세 노드 타입 정의
@@ -194,7 +194,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "조건 노드",
         "title": "조건 노드",
         "description": "이전 노드의 출력을 받아서 조건을 평가하는 노드입니다.",
-        "script": "node-condition.js",
+        "script": "conditionnodes/node-condition.js",
         "is_boundary": False,
         "category": "logic",
         # 노드 레벨 파라미터
@@ -259,7 +259,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "반복 노드",
         "title": "반복",
         "description": "아래에 연결된 노드들을 지정한 횟수만큼 반복 실행하는 노드입니다.",
-        "script": "node-repeat.js",
+        "script": "logicnodes/node-repeat.js",
         "is_boundary": False,
         "category": "logic",
         "has_bottom_output": True,  # 아래 연결점이 있음을 표시
@@ -305,7 +305,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "엑셀 열기 노드",
         "title": "엑셀 열기",
         "description": "win32를 사용하여 엑셀 파일을 열는 노드입니다. Windows 환경에서만 사용 가능합니다.",
-        "script": "node-excel-open.js",
+        "script": "excelnodes/node-excel-open.js",
         "is_boundary": False,
         "category": "action",
         "parameters": {
@@ -349,7 +349,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "엑셀 시트 선택 노드",
         "title": "엑셀 시트 선택",
         "description": "엑셀 열기 노드로 열린 워크북의 특정 시트를 선택하는 노드입니다. Windows 환경에서만 사용 가능합니다.",
-        "script": "node-excel-select-sheet.js",
+        "script": "excelnodes/node-excel-select-sheet.js",
         "is_boundary": False,
         "category": "action",
         "parameters": {
@@ -405,7 +405,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "엑셀 닫기 노드",
         "title": "엑셀 닫기",
         "description": "엑셀 열기 노드로 열린 엑셀 파일을 닫는 노드입니다. Windows 환경에서만 사용 가능합니다.",
-        "script": "node-excel-close.js",
+        "script": "excelnodes/node-excel-close.js",
         "is_boundary": False,
         "category": "action",
         "parameters": {

@@ -343,11 +343,22 @@
         <script type="module" src="/static/js/components/node/node.js"></script>
 
         <!-- 7. 각 노드 타입 정의 (NodeManager.registerNodeType 사용) -->
-        <script src="/static/js/components/node/node-start.js"></script>
-        <script src="/static/js/components/node/node-condition.js"></script>
-        <script src="/static/js/components/node/node-wait.js"></script>
-        <script src="/static/js/components/node/node-image-touch.js"></script>
-        <script src="/static/js/components/node/node-process-focus.js"></script>
+        <!-- 경계 노드 (Boundary Nodes) -->
+        <script src="/static/js/components/node/boundarynodes/node-start.js"></script>
+        <!-- 조건 노드 (Condition Nodes) -->
+        <script src="/static/js/components/node/conditionnodes/node-condition.js"></script>
+        <!-- 엑셀 노드 (Excel Nodes) -->
+        <script src="/static/js/components/node/excelnodes/node-excel-open.js"></script>
+        <script src="/static/js/components/node/excelnodes/node-excel-select-sheet.js"></script>
+        <script src="/static/js/components/node/excelnodes/node-excel-close.js"></script>
+        <!-- 이미지 노드 (Image Nodes) -->
+        <script src="/static/js/components/node/imagenodes/node-image-touch.js"></script>
+        <!-- 로직 노드 (Logic Nodes) -->
+        <script src="/static/js/components/node/logicnodes/node-repeat.js"></script>
+        <!-- 프로세스 노드 (Process Nodes) -->
+        <script src="/static/js/components/node/processnodes/node-process-focus.js"></script>
+        <!-- 대기 노드 (Wait Nodes) -->
+        <script src="/static/js/components/node/waitnodes/node-wait.js"></script>
 
         <!-- 8. 페이지 라우터 -->
         <script type="module" src="/static/pages/workflow/page-router.js"></script>
