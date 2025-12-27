@@ -53,6 +53,9 @@ class LogClient:
         result: dict[str, Any] | None = None,
         error_message: str | None = None,
         error_traceback: str | None = None,
+        is_connected: bool | None = None,
+        connection_sequence: int | None = None,
+        node_identifier: str | None = None,
     ) -> bool:
         """
         노드 실행 로그를 서버로 전송합니다.
@@ -98,6 +101,9 @@ class LogClient:
             "result": result,
             "error_message": error_message,
             "error_traceback": error_traceback,
+            "is_connected": is_connected,
+            "connection_sequence": connection_sequence,
+            "node_identifier": node_identifier,
         }
 
         try:
@@ -134,6 +140,9 @@ class LogClient:
         result: dict[str, Any] | None = None,
         error_message: str | None = None,
         error_traceback: str | None = None,
+        is_connected: bool | None = None,
+        connection_sequence: int | None = None,
+        node_identifier: str | None = None,
     ) -> None:
         """
         노드 실행 로그를 비동기로 전송합니다 (fire-and-forget).
@@ -172,6 +181,9 @@ class LogClient:
                     result=result,
                     error_message=error_message,
                     error_traceback=error_traceback,
+                    is_connected=is_connected,
+                    connection_sequence=connection_sequence,
+                    node_identifier=node_identifier,
                 ),
                 timeout=10.0,
             )
@@ -206,6 +218,9 @@ class LogClient:
         result: dict[str, Any] | None = None,
         error_message: str | None = None,
         error_traceback: str | None = None,
+        is_connected: bool | None = None,
+        connection_sequence: int | None = None,
+        node_identifier: str | None = None,
     ) -> bool:
         """
         로그 전송을 재시도하며 시도합니다.

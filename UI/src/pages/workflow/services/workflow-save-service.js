@@ -5,6 +5,7 @@
 
 import { getNodeRegistry } from './node-registry.js';
 import { t } from '../../../js/utils/i18n.js';
+import { getSimpleNodeIdentifier } from '../utils/node-identifier.js';
 
 export class WorkflowSaveService {
     constructor(workflowPage) {
@@ -71,6 +72,10 @@ export class WorkflowSaveService {
     async prepareNodesForAPI(nodes, nodeManager) {
         const registry = getNodeRegistry();
         const allConfigs = await registry.getNodeConfigs();
+
+        // 연결 정보 계산: 경계 노드부터 시작하여 연결 순서 계산
+        const connections = nodeManager ? nodeManager.getAllConnections() : [];
+        const connectionInfoMap = await this.calculateConnectionInfo(nodes, connections, nodeManager);
 
         return nodes.map((node) => {
             // parameters 추출 (nodes_config.py에서 정의한 파라미터 동적 추출)
@@ -172,6 +177,13 @@ export class WorkflowSaveService {
             // 파라미터를 data에도 포함 (UI에서 표시하기 위해)
             Object.assign(nodeDataForAPI, parameters);
 
+            // 연결 정보 가져오기
+            const connectionInfo = connectionInfoMap.get(node.id) || {
+                is_connected: false,
+                connection_sequence: null,
+                node_identifier: null
+            };
+
             return {
                 id: node.id,
                 type: node.type,
@@ -181,9 +193,111 @@ export class WorkflowSaveService {
                 },
                 data: nodeDataForAPI,
                 parameters: parameters,
-                description: description
+                description: description,
+                // 연결 정보 추가
+                is_connected: connectionInfo.is_connected,
+                connection_sequence: connectionInfo.connection_sequence,
+                node_identifier: connectionInfo.node_identifier
             };
         });
+    }
+
+    /**
+     * 연결 정보 계산: 경계 노드부터 시작하여 연결 순서 계산
+     */
+    async calculateConnectionInfo(nodes, connections, nodeManager) {
+        const connectionInfoMap = new Map();
+
+        // 노드 ID로 노드 찾기
+        const nodeById = new Map();
+        nodes.forEach((node) => {
+            nodeById.set(node.id, node);
+        });
+
+        // 경계 노드 찾기
+        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+        let boundaryNodeId = null;
+        for (const node of nodes) {
+            const nodeType = node.type || nodeManager?.nodeData?.[node.id]?.type;
+            if (nodeType && isBoundaryNodeSync(nodeType)) {
+                boundaryNodeId = node.id;
+                break;
+            }
+        }
+
+        // 연결 맵 생성: from -> [to1, to2, ...]
+        const nextMap = new Map();
+        connections.forEach((conn) => {
+            if (!nextMap.has(conn.from)) {
+                nextMap.set(conn.from, []);
+            }
+            nextMap.get(conn.from).push(conn.to);
+        });
+
+        // 경계 노드부터 BFS로 순서 계산
+        const ordered = [];
+        const visited = new Set();
+        const addedToOrdered = new Set();
+
+        if (boundaryNodeId && nodeById.has(boundaryNodeId)) {
+            ordered.push(nodeById.get(boundaryNodeId));
+            addedToOrdered.add(boundaryNodeId);
+        }
+
+        const queue = boundaryNodeId ? [boundaryNodeId] : [];
+
+        while (queue.length > 0) {
+            const cur = queue.shift();
+
+            if (visited.has(cur)) {
+                continue;
+            }
+
+            visited.add(cur);
+
+            if (nextMap.has(cur)) {
+                const nextNodes = nextMap.get(cur);
+                nextNodes.forEach((nextId) => {
+                    if (nodeById.has(nextId) && !addedToOrdered.has(nextId)) {
+                        ordered.push(nodeById.get(nextId));
+                        addedToOrdered.add(nextId);
+                        queue.push(nextId);
+                    }
+                });
+            }
+        }
+
+        // 연결되지 않은 노드들도 추가 (순서는 null로 설정)
+        nodes.forEach((node) => {
+            if (!addedToOrdered.has(node.id)) {
+                ordered.push(node);
+            }
+        });
+
+        // 각 노드의 연결 정보 계산
+        ordered.forEach((node, index) => {
+            const nodeId = node.id;
+            const hasInputConnection = connections.some((conn) => conn.to === nodeId);
+            const isBoundary = index === 0 && boundaryNodeId === nodeId;
+
+            // 노드 식별자 생성
+            const nodeType = node.type || nodeManager?.nodeData?.[nodeId]?.type;
+            const nodeData = nodeManager?.nodeData?.[nodeId] || node.data || {};
+            const nodeName = nodeData?.title || nodeData?.name || null;
+            const nodeIdentifier = getSimpleNodeIdentifier(
+                { id: nodeId, type: nodeType, title: nodeName },
+                isBoundary || hasInputConnection ? index : null,
+                ordered.length
+            );
+
+            connectionInfoMap.set(nodeId, {
+                is_connected: hasInputConnection || isBoundary,
+                connection_sequence: isBoundary || hasInputConnection ? index : null,
+                node_identifier: nodeIdentifier
+            });
+        });
+
+        return connectionInfoMap;
     }
 
     /**

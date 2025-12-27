@@ -8,6 +8,7 @@ import { getNodeRegistry } from './node-registry.js';
 import { getDashboardManagerInstance } from '../dashboard.js';
 import { captureAndSaveScreenshot } from '../../../js/api/screenshot-api.js';
 import { t } from '../../../js/utils/i18n.js';
+import { getLogNodeIdentifier, getSimpleNodeIdentifier } from '../utils/node-identifier.js';
 
 export class WorkflowExecutionService {
     constructor(workflowPage) {
@@ -245,7 +246,8 @@ export class WorkflowExecutionService {
                     document.getElementById(nodeData.id) || document.querySelector(`[data-node-id="${nodeData.id}"]`);
 
                 if (!nodeElement) {
-                    console.warn(`노드 요소를 찾을 수 없습니다: ${nodeData.id}`);
+                    const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                    console.warn(`[WorkflowExecutionService] 노드 요소를 찾을 수 없습니다: ${nodeIdentifier}`);
                     continue;
                 }
 
@@ -337,7 +339,10 @@ export class WorkflowExecutionService {
                         ) {
                             const conditionResult = nodeResult.output.result;
                             const logger = this.workflowPage.getLogger();
-                            logger.log(`[WorkflowExecutionService] Condition 노드 결과: ${conditionResult}`);
+                            const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                            logger.log(
+                                `[WorkflowExecutionService] Condition 노드 결과: ${nodeIdentifier} → ${conditionResult ? 'TRUE' : 'FALSE'}`
+                            );
 
                             // condition 노드의 연결 정보 가져오기
                             const connectionManager = nodeManager?.connectionManager;
@@ -379,7 +384,10 @@ export class WorkflowExecutionService {
                         ) {
                             const repeatCount = nodeResult.output.repeat_count;
                             const logger = this.workflowPage.getLogger();
-                            logger.log(`[WorkflowExecutionService] Repeat 노드 실행 - 반복 횟수: ${repeatCount}`);
+                            const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                            logger.log(
+                                `[WorkflowExecutionService] Repeat 노드 실행: ${nodeIdentifier} - 반복 횟수: ${repeatCount}`
+                            );
 
                             // 반복 노드의 연결 정보 가져오기
                             const connectionManager = nodeManager?.connectionManager;
@@ -898,7 +906,8 @@ export class WorkflowExecutionService {
                     // 네트워크 에러 또는 서버 에러 등
                     // 노드 실행 실패는 여기서 한 번만 카운팅
                     const logger = this.workflowPage.getLogger();
-                    logger.error(`[WorkflowExecutionService] 노드 실행 오류 (${nodeData.id}):`, error);
+                    const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                    logger.error(`[WorkflowExecutionService] 노드 실행 오류: ${nodeIdentifier}`, error);
                     this.showNodeError(nodeElement);
 
                     // 에러 발생 시에도 스크린샷 캡처 (에러 상황 기록용)
@@ -1305,6 +1314,36 @@ export class WorkflowExecutionService {
         const registry = getNodeRegistry();
         const allConfigs = await registry.getNodeConfigs();
 
+        // 연결 정보 계산: 각 노드의 연결 상태와 순서 계산
+        const connectionInfoMap = new Map();
+        const nodeIdToIndex = new Map();
+
+        // 경계 노드부터 시작하여 연결 순서 계산 (0부터 시작)
+        executableNodes.forEach((node, index) => {
+            const nodeId = node.id || node.dataset.nodeId;
+            nodeIdToIndex.set(nodeId, index);
+
+            // 연결 여부 확인: 이전 노드로부터 연결이 있는지 확인
+            const hasInputConnection = connections.some((conn) => conn.to === nodeId);
+            const isBoundary = index === 0; // 첫 번째 노드는 경계 노드
+
+            // 노드 식별자 생성
+            const nodeType = this.workflowPage.getNodeType(node);
+            const nodeData = this.workflowPage.getNodeData(node);
+            const nodeName = nodeData?.title || nodeData?.name || null;
+            const nodeIdentifier = getSimpleNodeIdentifier(
+                { id: nodeId, type: nodeType, title: nodeName },
+                index,
+                executableNodes.length
+            );
+
+            connectionInfoMap.set(nodeId, {
+                is_connected: hasInputConnection || isBoundary, // 경계 노드는 연결된 것으로 간주
+                connection_sequence: index, // 0부터 시작
+                node_identifier: nodeIdentifier
+            });
+        });
+
         // 각 노드에 대해 parameters 추출 (workflow-save-service.js와 동일한 로직)
         const nodesWithParameters = await Promise.all(
             executableNodes.map(async (node) => {
@@ -1407,11 +1446,22 @@ export class WorkflowExecutionService {
                     }
                 }
 
+                // 연결 정보 가져오기
+                const connectionInfo = connectionInfoMap.get(nodeId) || {
+                    is_connected: false,
+                    connection_sequence: null,
+                    node_identifier: null
+                };
+
                 return {
                     id: nodeId,
                     type: nodeType,
                     data: nodeData || {},
-                    parameters: parameters
+                    parameters: parameters,
+                    // 연결 정보 추가
+                    is_connected: connectionInfo.is_connected,
+                    connection_sequence: connectionInfo.connection_sequence,
+                    node_identifier: connectionInfo.node_identifier
                 };
             })
         );

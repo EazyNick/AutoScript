@@ -117,6 +117,10 @@ class NodeExecutor:
             node_name = validated_params.get("_node_name") or validated_params.get("node_name")
             script_id = validated_params.get("_script_id")
             execution_id = validated_params.get("_execution_id")
+            # 연결 정보 추출
+            is_connected = validated_params.get("is_connected")
+            connection_sequence = validated_params.get("connection_sequence")
+            node_identifier = validated_params.get("node_identifier")
 
             # 로그 전송용 파라미터 (내부 메타데이터 제외)
             log_parameters = {k: v for k, v in validated_params.items() if not k.startswith("_")}
@@ -139,6 +143,9 @@ class NodeExecutor:
                     status="running",
                     started_at=started_at,
                     parameters=log_parameters,
+                    is_connected=is_connected,
+                    connection_sequence=connection_sequence,
+                    node_identifier=node_identifier,
                 )
             )
 
@@ -171,6 +178,9 @@ class NodeExecutor:
                         execution_time_ms=execution_time_ms,
                         parameters=log_parameters,
                         result=normalized_result,
+                        is_connected=is_connected,
+                        connection_sequence=connection_sequence,
+                        node_identifier=node_identifier,
                     )
                 )
 
@@ -209,6 +219,9 @@ class NodeExecutor:
                         result=error_result,
                         error_message=str(e),
                         error_traceback=error_trace,
+                        is_connected=is_connected,
+                        connection_sequence=connection_sequence,
+                        node_identifier=node_identifier,
                     )
                 )
 

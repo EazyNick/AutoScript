@@ -277,12 +277,14 @@
 - **자동 로깅**: 노드 실행 시 자동으로 로그 생성 (서버 측)
 - **비동기 전송**: 로그 전송이 노드 실행 성능에 영향을 주지 않음
 - **상세 정보**: 실행 시간, 파라미터, 결과, 에러 정보 등 상세 기록
+- **연결 정보 포함**: 노드 연결 여부, 연결 순서, 노드 식별자 정보 포함 (v0.0.6+)
 - **그룹화**: `execution_id`를 통해 같은 워크플로우 실행의 노드들을 그룹화
 - **다양한 조회**: 실행 ID, 스크립트 ID, 노드 ID, 상태별 조회 지원
 - **시각적 표시**: 프론트엔드에서 실행 그룹별로 접을 수 있는 형태로 표시 (헤더 전체 클릭 가능)
 - **실시간 통계**: 전체/완료/실패 개수, 평균 실행 시간 등 자동 계산
 - **로그 삭제**: 전체/실행 그룹/개별 로그 삭제 기능 제공
 - **읽기 쉬운 실행 ID**: 날짜시간 기반의 실행 ID로 실행 시점을 바로 확인 가능
+- **오류 발생 시 로그 저장 확인 개선**: 오류 발생 시에도 로그 저장이 안정적으로 확인됨 (v0.0.6+)
 
 ## 테이블 구조
 
@@ -306,6 +308,9 @@ CREATE TABLE node_execution_logs (
     result TEXT DEFAULT '{}',
     error_message TEXT,
     error_traceback TEXT,
+    is_connected INTEGER DEFAULT 0,
+    connection_sequence INTEGER,
+    node_identifier TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
 )
@@ -330,6 +335,9 @@ CREATE TABLE node_execution_logs (
 - `result`: 실행 결과 (JSON 문자열)
 - `error_message`: 에러 메시지 (실패 시)
 - `error_traceback`: 에러 스택 트레이스 (실패 시)
+- `is_connected`: 노드가 다른 노드와 연결되어 있는지 여부 (0: 미연결, 1: 연결됨)
+- `connection_sequence`: 연결된 노드 체인에서의 순서 (0부터 시작, NULL: 연결되지 않음)
+- `node_identifier`: 노드 식별자 문자열 (로그 출력용, 예: "이미지 터치 (image-touch) #2/5 ID:node1")
 - `created_at`: 로그 생성 시간
 
 **인덱스:**

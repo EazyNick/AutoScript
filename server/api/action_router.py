@@ -347,12 +347,21 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
             for i, node in enumerate(request.nodes):
                 node_id = node.get("id", f"node_{i}")
                 node_type = node.get("type", "unknown")
-                node_name = node.get("data", {}).get("title") or node.get("data", {}).get("name") or node_id
+                node_name = node.get("data", {}).get("title") or node.get("data", {}).get("name") or None
                 # 현재 노드 순번 계산 (클라이언트에서 전달된 순번 + 루프 인덱스)
                 current_node_number = start_index + i + 1
-                logger.info(
-                    f"[API] 노드 {current_node_number}/{total_nodes} 실행 시작 - ID: {node_id}, 타입: {node_type}, 이름: {node_name}"
-                )
+
+                # 노드 식별자 포맷팅
+                node_identifier_parts = []
+                if node_name:
+                    node_identifier_parts.append(node_name)
+                node_identifier_parts.append(f"({node_type})")
+                node_identifier_parts.append(f"#{current_node_number}/{total_nodes}")
+                if node_id and node_id != "start":
+                    node_identifier_parts.append(f"ID:{node_id}")
+                node_identifier = " ".join(node_identifier_parts)
+
+                logger.info(f"[API] 노드 실행 시작: {node_identifier}")
                 try:
                     # 실행 컨텍스트와 함께 노드 실행 (execution_id와 메타데이터 전달)
                     result = await action_service.process_node(

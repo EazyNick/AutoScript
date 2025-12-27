@@ -237,9 +237,17 @@ class ActionService:
             if node_name:
                 node_data["_node_name"] = node_name
 
-            logger.info(f"[process_node] 노드 타입: {node_type}")
-            logger.info(f"[process_node] 노드 데이터: {node_data}")
-            logger.info(f"[process_node] 노드 데이터 키 목록: {list(node_data.keys()) if node_data else []}")
+            # 노드 식별자 포맷팅
+            node_identifier_parts = []
+            if node_name:
+                node_identifier_parts.append(node_name)
+            node_identifier_parts.append(f"({node_type})")
+            if node_id and node_id != "start":
+                node_identifier_parts.append(f"ID:{node_id}")
+            node_identifier = " ".join(node_identifier_parts) if node_identifier_parts else f"{node_type}(ID:{node_id})"
+
+            logger.info(f"[process_node] 노드 실행: {node_identifier}")
+            logger.debug(f"[process_node] 노드 데이터 키 목록: {list(node_data.keys()) if node_data else []}")
 
             # folder_path 파라미터 확인 (image-touch 노드용)
             # image-touch 노드는 이미지 폴더 경로가 필요함

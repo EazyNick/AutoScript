@@ -41,6 +41,9 @@ class NodeExecutionLogRepository:
         result: dict[str, Any] | None = None,
         error_message: str | None = None,
         error_traceback: str | None = None,
+        is_connected: bool | None = None,
+        connection_sequence: int | None = None,
+        node_identifier: str | None = None,
     ) -> int:
         """
         노드 실행 로그 생성 또는 업데이트
@@ -119,6 +122,8 @@ class NodeExecutionLogRepository:
                     if running_log:
                         # running 로그를 completed/failed로 업데이트
                         log_id_to_update = running_log[0]
+                        # 연결 정보는 running 상태에서 이미 설정되므로 업데이트 시에는 유지
+                        # 필요시 파라미터로 받아서 업데이트할 수 있도록 함
                         cursor.execute(
                             """
                             UPDATE node_execution_logs
@@ -127,7 +132,10 @@ class NodeExecutionLogRepository:
                                 execution_time_ms = ?,
                                 result = ?,
                                 error_message = ?,
-                                error_traceback = ?
+                                error_traceback = ?,
+                                is_connected = COALESCE(?, is_connected),
+                                connection_sequence = COALESCE(?, connection_sequence),
+                                node_identifier = COALESCE(?, node_identifier)
                             WHERE id = ?
                             """,
                             (
@@ -137,6 +145,9 @@ class NodeExecutionLogRepository:
                                 result_json,
                                 error_message,
                                 error_traceback,
+                                1 if is_connected else 0 if is_connected is False else None,
+                                connection_sequence,
+                                node_identifier,
                                 log_id_to_update,
                             ),
                         )
@@ -174,8 +185,9 @@ class NodeExecutionLogRepository:
                 INSERT INTO node_execution_logs (
                     execution_id, script_id, node_id, node_type, node_name,
                     status, started_at, finished_at, execution_time_ms,
-                    parameters, result, error_message, error_traceback
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    parameters, result, error_message, error_traceback,
+                    is_connected, connection_sequence, node_identifier
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     execution_id,
@@ -191,6 +203,9 @@ class NodeExecutionLogRepository:
                     result_json,
                     error_message,
                     error_traceback,
+                    1 if is_connected else 0 if is_connected is False else None,
+                    connection_sequence,
+                    node_identifier,
                 ),
             )
 
@@ -225,7 +240,8 @@ class NodeExecutionLogRepository:
                 SELECT
                     id, execution_id, script_id, node_id, node_type, node_name,
                     status, started_at, finished_at, execution_time_ms,
-                    parameters, result, error_message, error_traceback, created_at
+                    parameters, result, error_message, error_traceback, created_at,
+                    is_connected, connection_sequence, node_identifier
                 FROM node_execution_logs
                 WHERE execution_id = ?
                 ORDER BY started_at ASC
@@ -251,6 +267,9 @@ class NodeExecutionLogRepository:
                     "error_message": row[12],
                     "error_traceback": row[13],
                     "created_at": row[14],
+                    "is_connected": bool(row[15]) if row[15] is not None else None,
+                    "connection_sequence": row[16],
+                    "node_identifier": row[17],
                 }
                 logs.append(log)
 
@@ -279,7 +298,8 @@ class NodeExecutionLogRepository:
                 SELECT
                     id, execution_id, script_id, node_id, node_type, node_name,
                     status, started_at, finished_at, execution_time_ms,
-                    parameters, result, error_message, error_traceback, created_at
+                    parameters, result, error_message, error_traceback, created_at,
+                    is_connected, connection_sequence, node_identifier
                 FROM node_execution_logs
                 WHERE script_id = ?
                 ORDER BY started_at DESC
@@ -306,6 +326,9 @@ class NodeExecutionLogRepository:
                     "error_message": row[12],
                     "error_traceback": row[13],
                     "created_at": row[14],
+                    "is_connected": bool(row[15]) if row[15] is not None else None,
+                    "connection_sequence": row[16],
+                    "node_identifier": row[17],
                 }
                 logs.append(log)
 
@@ -334,7 +357,8 @@ class NodeExecutionLogRepository:
                 SELECT
                     id, execution_id, script_id, node_id, node_type, node_name,
                     status, started_at, finished_at, execution_time_ms,
-                    parameters, result, error_message, error_traceback, created_at
+                    parameters, result, error_message, error_traceback, created_at,
+                    is_connected, connection_sequence, node_identifier
                 FROM node_execution_logs
                 WHERE node_id = ?
                 ORDER BY started_at DESC
@@ -361,6 +385,9 @@ class NodeExecutionLogRepository:
                     "error_message": row[12],
                     "error_traceback": row[13],
                     "created_at": row[14],
+                    "is_connected": bool(row[15]) if row[15] is not None else None,
+                    "connection_sequence": row[16],
+                    "node_identifier": row[17],
                 }
                 logs.append(log)
 
@@ -387,7 +414,8 @@ class NodeExecutionLogRepository:
                 SELECT
                     id, execution_id, script_id, node_id, node_type, node_name,
                     status, started_at, finished_at, execution_time_ms,
-                    parameters, result, error_message, error_traceback, created_at
+                    parameters, result, error_message, error_traceback, created_at,
+                    is_connected, connection_sequence, node_identifier
                 FROM node_execution_logs
                 ORDER BY started_at DESC
                 LIMIT ?
@@ -413,6 +441,9 @@ class NodeExecutionLogRepository:
                     "error_message": row[12],
                     "error_traceback": row[13],
                     "created_at": row[14],
+                    "is_connected": bool(row[15]) if row[15] is not None else None,
+                    "connection_sequence": row[16],
+                    "node_identifier": row[17],
                 }
                 logs.append(log)
 
@@ -441,7 +472,8 @@ class NodeExecutionLogRepository:
                     SELECT
                         id, execution_id, script_id, node_id, node_type, node_name,
                         status, started_at, finished_at, execution_time_ms,
-                        parameters, result, error_message, error_traceback, created_at
+                        parameters, result, error_message, error_traceback, created_at,
+                        is_connected, connection_sequence, node_identifier
                     FROM node_execution_logs
                     WHERE status = 'failed' AND script_id = ?
                     ORDER BY started_at DESC
@@ -455,7 +487,8 @@ class NodeExecutionLogRepository:
                     SELECT
                         id, execution_id, script_id, node_id, node_type, node_name,
                         status, started_at, finished_at, execution_time_ms,
-                        parameters, result, error_message, error_traceback, created_at
+                        parameters, result, error_message, error_traceback, created_at,
+                        is_connected, connection_sequence, node_identifier
                     FROM node_execution_logs
                     WHERE status = 'failed'
                     ORDER BY started_at DESC
@@ -482,6 +515,9 @@ class NodeExecutionLogRepository:
                     "error_message": row[12],
                     "error_traceback": row[13],
                     "created_at": row[14],
+                    "is_connected": bool(row[15]) if row[15] is not None else None,
+                    "connection_sequence": row[16],
+                    "node_identifier": row[17],
                 }
                 logs.append(log)
 

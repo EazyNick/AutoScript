@@ -604,11 +604,21 @@ export class AddNodeModal {
         // 경계 노드인지 확인하여 ID 생성
         const { isBoundaryNodeSync } = await import('../constants/node-types.js');
         const isBoundary = isBoundaryNodeSync(nodeType);
-        const nodeId = isBoundary
-            ? nodeType === 'start'
-                ? 'start'
-                : `${nodeType}_${Date.now()}`
-            : `node_${Date.now()}`;
+
+        // 노드 ID 생성: 타입과 타임스탬프를 포함하여 더 명확하게 식별 가능하도록
+        let nodeId;
+        if (isBoundary) {
+            if (nodeType === 'start') {
+                nodeId = 'start';
+            } else {
+                // 경계 노드: 타입_타임스탬프 형식
+                nodeId = `${nodeType}_${Date.now()}`;
+            }
+        } else {
+            // 일반 노드: 타입_타임스탬프 형식으로 생성하여 타입을 바로 알 수 있도록
+            const shortType = nodeType.replace(/-/g, '_'); // 하이픈을 언더스코어로 변환
+            nodeId = `${shortType}_${Date.now()}`;
+        }
 
         const nodeData = {
             id: nodeId,

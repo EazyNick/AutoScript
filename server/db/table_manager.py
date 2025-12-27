@@ -76,6 +76,9 @@ class TableManager:
                     connected_from TEXT DEFAULT '[]',
                     parameters TEXT DEFAULT '{}',
                     description TEXT,
+                    is_connected INTEGER DEFAULT 0,
+                    connection_sequence INTEGER,
+                    node_identifier TEXT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (script_id) REFERENCES scripts (id) ON DELETE CASCADE
@@ -88,6 +91,21 @@ class TableManager:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_nodes_script_id ON nodes(script_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_nodes_type ON nodes(node_type)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_nodes_script_type ON nodes(script_id, node_type)")
+
+            # 연결 정보 필드 마이그레이션 (기존 테이블에 컬럼 추가)
+            # 기존 데이터와의 호환성을 위해 NULL 허용
+            with contextlib.suppress(Exception):
+                cursor.execute("ALTER TABLE nodes ADD COLUMN is_connected INTEGER DEFAULT 0")
+
+            with contextlib.suppress(Exception):
+                cursor.execute("ALTER TABLE nodes ADD COLUMN connection_sequence INTEGER")
+
+            with contextlib.suppress(Exception):
+                cursor.execute("ALTER TABLE nodes ADD COLUMN node_identifier TEXT")
+
+            # 연결 정보 인덱스 추가 (조회 최적화)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_nodes_connection_seq ON nodes(connection_sequence)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_nodes_is_connected ON nodes(is_connected)")
 
             # 사용자 설정 테이블 생성 (개선: 향후 인증 시스템 대비)
             # 사용자별 설정을 키-값 쌍으로 저장
@@ -150,6 +168,9 @@ class TableManager:
                     error_message TEXT,
                     error_traceback TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_connected INTEGER DEFAULT 0,
+                    connection_sequence INTEGER,
+                    node_identifier TEXT,
                     FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
                 )
             """)
@@ -164,6 +185,23 @@ class TableManager:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_node_logs_script_started ON node_execution_logs(script_id, started_at DESC)"
             )
+
+            # 연결 정보 필드 마이그레이션 (기존 테이블에 컬럼 추가)
+            # 기존 데이터와의 호환성을 위해 NULL 허용
+            with contextlib.suppress(Exception):
+                cursor.execute("ALTER TABLE node_execution_logs ADD COLUMN is_connected INTEGER DEFAULT 0")
+
+            with contextlib.suppress(Exception):
+                cursor.execute("ALTER TABLE node_execution_logs ADD COLUMN connection_sequence INTEGER")
+
+            with contextlib.suppress(Exception):
+                cursor.execute("ALTER TABLE node_execution_logs ADD COLUMN node_identifier TEXT")
+
+            # 연결 정보 인덱스 추가 (조회 최적화)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_node_logs_connection_seq ON node_execution_logs(connection_sequence)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_node_logs_is_connected ON node_execution_logs(is_connected)")
 
             # 로그 통계 테이블 생성 (실행 기록 페이지 통계)
             cursor.execute("""
