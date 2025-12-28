@@ -24,7 +24,7 @@
          │
          ▼
 ┌─────────────────┐
-│   LogClient     │  (server/utils/log_client.py)
+│ExecutionLogClient│  (server/execution_logging/execution_log_client.py)
 │   (유틸리티)     │
 └────────┬────────┘
          │
@@ -44,7 +44,7 @@
          │
          ▼
 ┌─────────────────┐
-│NodeExecutionLog│  (server/db/node_execution_log_repository.py)
+│NodeExecutionLog│  (server/execution_logging/execution_log_repository.py)
 │  Repository     │
 └────────┬────────┘
          │
@@ -103,7 +103,7 @@
          │
          ▼
 ┌─────────────────┐
-│NodeExecutionLog│  (server/db/node_execution_log_repository.py)
+│NodeExecutionLog│  (server/execution_logging/execution_log_repository.py)
 │  Repository     │
 └────────┬────────┘
          │
@@ -155,23 +155,23 @@
     ├─→ [노드 실행 시작]
     │   ├─→ NodeExecutor.wrapper() 호출
     │   ├─→ started_at 기록
-    │   ├─→ LogClient.send_log_async(status="running")
+    │   ├─→ ExecutionLogClient.send_log_async(status="running")
     │   └─→ 노드 실행 함수 호출
     │
     ├─→ [성공 시]
     │   ├─→ finished_at 기록
     │   ├─→ execution_time_ms 계산
-    │   └─→ LogClient.send_log_async(status="completed", result=...)
+    │   └─→ ExecutionLogClient.send_log_async(status="completed", result=...)
     │
     └─→ [실패 시]
         ├─→ finished_at 기록
         ├─→ execution_time_ms 계산
         ├─→ error_message, error_traceback 수집
-        └─→ LogClient.send_log_async(status="failed", error_message=...)
+        └─→ ExecutionLogClient.send_log_async(status="failed", error_message=...)
 
 [로그 저장 흐름]
     │
-    ├─→ LogClient.send_log_async()
+    ├─→ ExecutionLogClient.send_log_async()
     │   ├─→ HTTP POST /api/logs/node-execution
     │   ├─→ 비동기 전송 (asyncio)
     │   └─→ 에러 발생 시 조용히 무시
@@ -392,7 +392,7 @@ CREATE TABLE node_execution_logs (
 
 노드 실행 로그 관련 데이터베이스 작업을 처리하는 리포지토리입니다.
 
-**파일**: `server/db/node_execution_log_repository.py`
+**파일**: `server/execution_logging/execution_log_repository.py`
 
 **주요 메서드:**
 
@@ -720,11 +720,11 @@ DELETE /api/logs/node-execution
 
 ## 로그 클라이언트
 
-### `LogClient`
+### `ExecutionLogClient`
 
 노드 실행 로그를 서버로 전송하는 클라이언트 유틸리티입니다.
 
-**파일**: `server/utils/log_client.py`
+**파일**: `server/execution_logging/execution_log_client.py`
 
 **주요 메서드:**
 
@@ -733,7 +733,7 @@ DELETE /api/logs/node-execution
 노드 실행 로그를 동기적으로 전송합니다.
 
 ```python
-from server.utils.log_client import get_log_client
+from execution_logging.execution_log_client import get_log_client
 
 log_client = get_log_client()
 success = await log_client.send_log(
@@ -967,7 +967,7 @@ await logsManager.init();
 async def execute(parameters):
     # wrapper가 자동으로:
     # 1. started_at 기록
-    # 2. LogClient.send_log_async(status="running") 호출
+    # 2. ExecutionLogClient.send_log_async(status="running") 호출
     # 3. 노드 실행 함수 호출
     pass
 ```
@@ -979,7 +979,7 @@ async def execute(parameters):
 # wrapper가 자동으로:
 # 1. finished_at 기록
 # 2. execution_time_ms 계산
-# 3. LogClient.send_log_async(status="completed", result=...) 호출
+# 3. ExecutionLogClient.send_log_async(status="completed", result=...) 호출
 ```
 
 ### 3. 노드 실행 실패
@@ -990,13 +990,13 @@ async def execute(parameters):
 # 1. finished_at 기록
 # 2. execution_time_ms 계산
 # 3. error_message, error_traceback 수집
-# 4. LogClient.send_log_async(status="failed", error_message=...) 호출
+# 4. ExecutionLogClient.send_log_async(status="failed", error_message=...) 호출
 ```
 
 ### 4. 로그 전송
 
 ```python
-# LogClient.send_log_async()에서:
+# ExecutionLogClient.send_log_async()에서:
 # 1. HTTP POST /api/logs/node-execution 요청
 # 2. 비동기 전송 (asyncio)
 # 3. 에러 발생 시 조용히 무시

@@ -168,7 +168,7 @@ all_stats = repo.get_all_stats()
 
 노드 실행 로그 관련 데이터베이스 작업을 처리합니다.
 
-**파일**: `server/db/node_execution_log_repository.py`
+**파일**: `server/execution_logging/execution_log_repository.py`
 
 **주요 메서드:**
 - `create_log(...)`: 노드 실행 로그 생성
@@ -189,7 +189,7 @@ all_stats = repo.get_all_stats()
 
 **사용 예시:**
 ```python
-from server.db.node_execution_log_repository import NodeExecutionLogRepository
+from execution_logging.execution_log_repository import NodeExecutionLogRepository
 
 repo = NodeExecutionLogRepository(conn)
 

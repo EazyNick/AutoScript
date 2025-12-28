@@ -16,13 +16,18 @@ LogManager Module
     log_manager.logger.hr("Section Start", level=2)
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 import glob
 import logging
 import os
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 import colorlog
 
@@ -34,9 +39,10 @@ class LogManager:
     싱글톤 패턴으로 설계되었으며, 컬러 로그 포맷 및 로그 파일 정리를 지원합니다.
     """
 
-    _instance: Optional["LogManager"] = None
+    _instance: LogManager | None = None
+    logger: Logger
 
-    def __new__(cls, *args: object, **kwargs: object) -> "LogManager":
+    def __new__(cls, *args: object, **kwargs: object) -> LogManager:
         if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -81,7 +87,7 @@ class LogManager:
         """타임스탬프 초기화"""
         return datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    def _init_logger(self) -> logging.Logger:
+    def _init_logger(self) -> Logger:
         """로거 초기화"""
         logger = logging.getLogger("Automation")
 

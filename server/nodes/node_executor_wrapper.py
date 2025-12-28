@@ -45,9 +45,10 @@ import traceback
 from typing import Any, ParamSpec, TypeVar
 import uuid
 
+from execution_logging.execution_log_client import get_log_client
+
 from log import log_manager
 from utils import create_failed_result, normalize_result, validate_parameters
-from utils.log_client import get_log_client
 
 logger = log_manager.logger
 

@@ -1,4 +1,4 @@
-**최신 수정일자: 2025.12.00**
+**최신 수정일자: 2025.12.28**
 
 # 프로젝트 구조
 
@@ -33,6 +33,11 @@ AutoScript/
 - **services/**: 비즈니스 로직
 - **automation/**: 화면 캡처, 입력 처리, 워크플로우 실행
 - **db/**: SQLite 데이터베이스 관리
+- **execution_logging/**: 노드 실행 로그 관련 모듈 통합
+  - `execution_log_client.py`: 로그 전송 클라이언트
+  - `execution_log_models.py`: 로그 모델
+  - `execution_log_repository.py`: 로그 DB 리포지토리
+- **log/**: 애플리케이션 로그 관리 (`log_manager.py`)
 - **utils/**: 공통 유틸리티 (파라미터 검증, 결과 포맷팅 등)
 - **config/**: 설정 관리 (`server_config.py`)
 

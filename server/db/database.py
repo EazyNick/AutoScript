@@ -9,16 +9,18 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from logging import Logger
 
 # 로거 초기화
 logger = logging.getLogger(__name__)
 
 # 직접 실행 시와 모듈로 import 시 모두 지원
 try:
+    from execution_logging.execution_log_repository import NodeExecutionLogRepository
+
     from .connection import DatabaseConnection
     from .dashboard_stats_repository import DashboardStatsRepository
     from .log_stats_repository import LogStatsRepository
-    from .node_execution_log_repository import NodeExecutionLogRepository
     from .node_repository import NodeRepository
     from .script_repository import ScriptRepository
     from .table_manager import TableManager
@@ -26,10 +28,11 @@ try:
 except ImportError:
     # 직접 실행 시 절대 import 사용
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from execution_logging.execution_log_repository import NodeExecutionLogRepository
+
     from db.connection import DatabaseConnection
     from db.dashboard_stats_repository import DashboardStatsRepository
     from db.log_stats_repository import LogStatsRepository
-    from db.node_execution_log_repository import NodeExecutionLogRepository
     from db.node_repository import NodeRepository
     from db.script_repository import ScriptRepository
     from db.table_manager import TableManager
@@ -505,7 +508,7 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def seed_example_data(self, logger: logging.Logger | None = None) -> None:
+    def seed_example_data(self, logger: Logger | None = None) -> None:
         """
         예시 데이터 생성
 

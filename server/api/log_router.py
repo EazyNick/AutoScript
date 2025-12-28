@@ -2,13 +2,13 @@
 로그 관련 API 라우터
 """
 
+from execution_logging.execution_log_models import NodeExecutionLogRequest, NodeExecutionLogResponse
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from api.response_helpers import list_response, success_response
 from api.router_wrapper import api_handler
 from db.database import db_manager
 from log import log_manager
-from models.log_models import NodeExecutionLogRequest, NodeExecutionLogResponse
 from models.response_models import ListResponse, SuccessResponse
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])

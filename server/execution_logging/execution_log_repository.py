@@ -7,7 +7,7 @@ from typing import Any
 
 # 직접 실행 시와 모듈로 import 시 모두 지원
 try:
-    from .connection import DatabaseConnection
+    from db.connection import DatabaseConnection
 except ImportError:
     # 직접 실행 시 절대 import 사용
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

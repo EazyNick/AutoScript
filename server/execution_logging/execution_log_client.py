@@ -15,12 +15,12 @@ from log import log_manager
 logger = log_manager.logger
 
 
-class LogClient:
+class ExecutionLogClient:
     """로그 서버로 전송하는 클라이언트"""
 
     def __init__(self, base_url: str | None = None) -> None:
         """
-        LogClient 초기화
+        ExecutionLogClient 초기화
 
         Args:
             base_url: API 서버 기본 URL (None이면 설정에서 가져옴)
@@ -113,16 +113,20 @@ class LogClient:
                 session.post(self.log_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=2)) as response,
             ):
                 if response.status == 200:
-                    logger.debug(f"[LogClient] 로그 전송 성공 - 노드 ID: {node_id}, 상태: {status}")
+                    logger.debug(f"[ExecutionLogClient] 로그 전송 성공 - 노드 ID: {node_id}, 상태: {status}")
                     return True
                 error_text = await response.text()
-                logger.warning(f"[LogClient] 로그 전송 실패 - 상태 코드: {response.status}, 응답: {error_text}")
+                logger.warning(
+                    f"[ExecutionLogClient] 로그 전송 실패 - 상태 코드: {response.status}, 응답: {error_text}"
+                )
                 return False
         except asyncio.TimeoutError:
-            logger.warning(f"[LogClient] 로그 전송 타임아웃 (2초) - 노드 ID: {node_id}, 상태: {status}")
+            logger.warning(f"[ExecutionLogClient] 로그 전송 타임아웃 (2초) - 노드 ID: {node_id}, 상태: {status}")
             return False
         except Exception as e:
-            logger.warning(f"[LogClient] 로그 전송 중 오류 발생 - 노드 ID: {node_id}, 상태: {status}, 오류: {e!s}")
+            logger.warning(
+                f"[ExecutionLogClient] 로그 전송 중 오류 발생 - 노드 ID: {node_id}, 상태: {status}, 오류: {e!s}"
+            )
             return False
 
     async def send_log_async(
@@ -190,17 +194,17 @@ class LogClient:
             if not success:
                 # 로그 전송 실패 시 경고 로그 출력 (특히 실패한 노드의 경우)
                 logger.warning(
-                    f"[LogClient] 로그 전송 실패 - 노드 ID: {node_id}, 노드 타입: {node_type}, 상태: {status}"
+                    f"[ExecutionLogClient] 로그 전송 실패 - 노드 ID: {node_id}, 노드 타입: {node_type}, 상태: {status}"
                 )
         except asyncio.TimeoutError:
             # 전체 타임아웃(10초) 초과 시 경고 로그 출력
             logger.warning(
-                f"[LogClient] 로그 전송 전체 타임아웃 (10초) - 노드 ID: {node_id}, 노드 타입: {node_type}, 상태: {status}"
+                f"[ExecutionLogClient] 로그 전송 전체 타임아웃 (10초) - 노드 ID: {node_id}, 노드 타입: {node_type}, 상태: {status}"
             )
         except Exception as e:
             # 로그 전송 실패는 노드 실행에 영향을 주지 않도록 조용히 처리하되, 경고 로그 출력
             logger.warning(
-                f"[LogClient] 로그 전송 중 예외 발생 (무시됨) - 노드 ID: {node_id}, 노드 타입: {node_type}, 상태: {status}, 오류: {e!s}"
+                f"[ExecutionLogClient] 로그 전송 중 예외 발생 (무시됨) - 노드 ID: {node_id}, 노드 타입: {node_type}, 상태: {status}, 오류: {e!s}"
             )
 
     async def _send_log_with_retry(
@@ -252,30 +256,32 @@ class LogClient:
 
             if success:
                 if attempt > 0:
-                    logger.debug(f"[LogClient] 로그 전송 성공 (재시도 {attempt}회 후) - 노드 ID: {node_id}")
+                    logger.debug(f"[ExecutionLogClient] 로그 전송 성공 (재시도 {attempt}회 후) - 노드 ID: {node_id}")
                 return True
 
             # 마지막 시도가 아니면 재시도 전 대기
             if attempt < max_retries - 1:
                 await asyncio.sleep(retry_delay)
-                logger.debug(f"[LogClient] 로그 전송 재시도 ({attempt + 1}/{max_retries}) - 노드 ID: {node_id}")
+                logger.debug(
+                    f"[ExecutionLogClient] 로그 전송 재시도 ({attempt + 1}/{max_retries}) - 노드 ID: {node_id}"
+                )
 
         # 모든 재시도 실패
         return False
 
 
 # 전역 로그 클라이언트 인스턴스
-_log_client: LogClient | None = None
+_log_client: ExecutionLogClient | None = None
 
 
-def get_log_client() -> LogClient:
+def get_log_client() -> ExecutionLogClient:
     """
     전역 로그 클라이언트 인스턴스를 반환합니다.
 
     Returns:
-        LogClient 인스턴스
+        ExecutionLogClient 인스턴스
     """
     global _log_client
     if _log_client is None:
-        _log_client = LogClient()
+        _log_client = ExecutionLogClient()
     return _log_client
