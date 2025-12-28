@@ -8,6 +8,8 @@
 - **Content-Type**: `application/json`
 - **API 문서**: `http://{API_HOST}:{API_PORT}/docs` (Swagger UI)
 
+> **참고**: `.env` 파일이 없으면 기본값(`127.0.0.1:8001`)을 사용합니다. `.env` 파일 생성 방법은 [환경 변수 설정 가이드](environment.md)를 참고하세요.
+
 ## API 응답 형식
 
 모든 API 엔드포인트는 일관된 응답 형식을 사용합니다.
@@ -802,7 +804,7 @@ DELETE /api/config/user-settings/{setting_key}
 - **액션 노드**: `image-touch`, `process-focus`
 - **대기 노드**: `wait`
 - **조건 노드**: `condition`
-- **반복 노드**: `loop`
+- **반복 노드**: `repeat`
 
 ## 관련 문서
 

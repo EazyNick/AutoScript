@@ -26,7 +26,7 @@ class Settings:
     SCREEN_WIDTH: int = int(os.getenv("SCREEN_WIDTH", "1920"))
     SCREEN_HEIGHT: int = int(os.getenv("SCREEN_HEIGHT", "1080"))
 
-    # 자동화 설정
+    # automation 설정
     AUTO_CLICK_DELAY: float = float(os.getenv("AUTO_CLICK_DELAY", "0.5"))
     AUTO_MOVE_DELAY: float = float(os.getenv("AUTO_MOVE_DELAY", "1.0"))
     SCREENSHOT_INTERVAL: float = float(os.getenv("SCREENSHOT_INTERVAL", "0.1"))

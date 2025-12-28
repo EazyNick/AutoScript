@@ -1,5 +1,7 @@
 # 노드 출력 데이터 표준 형식
 
+**최신 수정일자: 2025-12-24**
+
 모든 노드는 n8n 스타일의 표준 출력 형식을 따라야 합니다. 이를 통해 프론트엔드에서 이전 노드의 출력 변수들을 일관되게 표시하고 사용자가 선택할 수 있습니다.
 
 ## 표준 출력 형식
@@ -10,9 +12,19 @@
 {
     "action": str,           # 노드 타입 (예: "click", "http-request")
     "status": str,           # "completed" 또는 "failed"
-    "output": dict[str, Any] # 실제 출력 데이터 (키-값 쌍으로 구성)
+    "output": dict[str, Any], # 실제 출력 데이터 (키-값 쌍으로 구성)
+    # 메타데이터 (v0.0.6 추가)
+    "_execution_id": str,    # 워크플로우 실행 ID (선택적)
+    "_script_id": int,       # 스크립트 ID (선택적)
+    "_node_id": str,         # 노드 ID
+    "_node_name": str        # 노드 이름 (선택적)
 }
 ```
+
+**v0.0.6 변경사항:** 
+- 노드 실행 결과는 기존 형식 `{action, status, output}`을 그대로 유지합니다.
+- 메타데이터 필드(`_execution_id`, `_script_id`, `_node_id`, `_node_name`)가 자동으로 추가됩니다.
+- 다음 노드에서 이전 노드 결과를 참조할 때만 `outdata.`/`indata.` 경로를 사용합니다.
 
 ### 성공 시
 
@@ -24,7 +36,11 @@
         "x": 100,
         "y": 200,
         "success": True
-    }
+    },
+    "_execution_id": "20250101-120000-abc123",
+    "_script_id": 1,
+    "_node_id": "node1",
+    "_node_name": "클릭 노드"
 }
 ```
 
@@ -41,7 +57,11 @@
     "error": {
         "reason": "element_not_found",
         "message": "요소를 찾을 수 없습니다"
-    }
+    },
+    "_execution_id": "20250101-120000-abc123",
+    "_script_id": 1,
+    "_node_id": "node1",
+    "_node_name": "클릭 노드"
 }
 ```
 
@@ -183,6 +203,7 @@ class ClickNode(BaseNode):
         y = get_parameter(parameters, "y", default=0)
         
         # output을 dict로 반환 (각 키가 변수로 표시됨)
+        # 메타데이터는 action_service.py에서 자동으로 추가됨
         return {
             "action": "click",
             "status": "completed",
@@ -192,6 +213,16 @@ class ClickNode(BaseNode):
                 "clicked": True
             }
         }
+        # 실제 반환 결과에는 메타데이터가 자동으로 추가됨:
+        # {
+        #     "action": "click",
+        #     "status": "completed",
+        #     "output": {"x": 100, "y": 200, "clicked": True},
+        #     "_execution_id": "20250101-120000-abc123",
+        #     "_script_id": 1,
+        #     "_node_id": "node1",
+        #     "_node_name": "클릭 노드"
+        # }
 ```
 
 ### 예시 2: HTTP 요청 노드
@@ -362,8 +393,69 @@ class RssFeedNode(BaseNode):
 }
 ```
 
+## 이전 노드 출력 접근 (v0.0.6)
+
+### 경로 형식
+
+다음 노드에서 이전 노드의 출력을 사용할 때는 `outdata.` 경로를 사용합니다:
+
+**기본 형식:**
+- `outdata.output.field_name` - 이전 노드의 output 필드 접근
+- `outdata.action` - 이전 노드의 action 값
+- `outdata.status` - 이전 노드의 status 값
+- `indata.parameter_name` - 현재 노드의 입력 파라미터 접근
+
+**예시:**
+```python
+# 엑셀 열기 노드 실행 결과 (기존 형식 유지 + 메타데이터)
+{
+    "action": "excel-open",
+    "status": "completed",
+    "output": {
+        "execution_id": "20250101-120000-abc123",
+        "file_path": "C:/Users/User/Downloads/test.xlsx"
+    },
+    "_execution_id": "20250101-120000-abc123",
+    "_script_id": 1,
+    "_node_id": "node1",
+    "_node_name": "엑셀 열기"
+}
+
+# 다음 노드(엑셀 시트 선택)에서 사용
+# 경로 해석 시 내부적으로 outdata 구조로 래핑하여 처리
+parameters = {
+    "execution_id": "outdata.output.execution_id",  # 자동으로 "20250101-120000-abc123"로 해석됨
+    "sheet_name": "Sheet1"
+}
+```
+
+### 자동 경로 해석
+
+`server/utils/field_path_resolver.py`가 모든 노드의 파라미터에서 경로 문자열을 자동으로 해석합니다:
+
+1. 파라미터 값이 `outdata.` 또는 `indata.`로 시작하는지 확인
+2. 이전 노드 결과에서 실제 값 추출
+3. 파라미터 값을 실제 값으로 교체
+
+이렇게 하면 엑셀 노드뿐만 아니라 모든 노드에서 이전 노드 출력을 자동으로 사용할 수 있습니다.
+
+### 경로 형식 변경 이력
+
+**v0.0.5 이하:**
+- `output.data.execution_id`
+- `output.execution_id`
+
+**v0.0.6 이후:**
+- `outdata.output.execution_id` ✅ - 이전 노드의 출력 데이터 접근
+- `outdata.action` - 이전 노드의 action 값
+- `outdata.status` - 이전 노드의 status 값
+- `indata.parameter_name` - 이전 노드의 입력 파라미터 접근 (향후 지원)
+
+**중요:** 노드 실행 결과 자체는 기존 형식 `{action, status, output}`을 그대로 유지합니다. 경로 해석 시에만 내부적으로 `outdata` 구조로 래핑하여 처리합니다.
+
 ## 참고
 
+- `server/utils/field_path_resolver.py`: 경로 해석 유틸리티 (v0.0.6 추가)
 - `server/utils/result_formatter.py`: 표준화 함수 구현
 - `server/nodes/node_executor_wrapper.py`: 자동 정규화 로직
 - `server/config/nodes_config.py`: 노드 스키마 정의

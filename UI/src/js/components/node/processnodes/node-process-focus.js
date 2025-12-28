@@ -7,10 +7,6 @@
     }
 
     window.NodeManager.registerNodeType('process-focus', {
-        /**
-         * 프로세스 포커스 노드 내용 생성
-         * @param {Object} nodeData
-         */
         renderContent(nodeData) {
             const icon = window.NodeIcons ? window.NodeIcons.getIcon('process-focus', nodeData) : '🖥️';
             const processName = nodeData.process_name || '프로세스 미선택';

@@ -3,9 +3,13 @@
 모든 노드의 공통 기능을 제공하는 추상 클래스
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from logging import Logger
 
 from log import log_manager
 from utils import validate_parameters
@@ -26,7 +30,7 @@ class BaseNode(ABC):
 
     # 공통 로거 프로퍼티
     @property
-    def logger(self) -> logging.Logger:
+    def logger(self) -> Logger:
         """노드에서 사용할 로거 인스턴스"""
         return log_manager.logger
 

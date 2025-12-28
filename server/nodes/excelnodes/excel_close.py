@@ -61,8 +61,8 @@ class ExcelCloseNode(BaseNode):
 
         # execution_id 가져오기 (우선순위: 사용자 입력 > 이전 노드 출력 > 메타데이터)
         # execution_id: 워크플로우 실행 ID (열려있는 엑셀 객체를 찾기 위해 필요)
-        # 1순위: 사용자가 직접 입력한 execution_id
-        # 2순위: 이전 노드 출력에서 가져온 execution_id (_execution_id_from_prev)
+        # 1순위: 사용자가 직접 입력한 execution_id (action_service에서 경로 문자열이 실제 값으로 변환됨)
+        # 2순위: 이전 노드 출력에서 가져온 execution_id (_execution_id_from_prev, 하위 호환성)
         # 3순위: 메타데이터의 execution_id (_execution_id)
         execution_id = (
             get_parameter(parameters, "execution_id", default="")

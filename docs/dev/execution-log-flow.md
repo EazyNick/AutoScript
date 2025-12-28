@@ -17,9 +17,9 @@
     │   │
     │   ├─→ [노드 실행] (각 노드마다)
     │   │   ├─→ NodeExecutor.wrapper() 호출
-    │   │   ├─→ LogClient.send_log_async(status="running")
+    │   │   ├─→ ExecutionLogClient.send_log_async(status="running")
     │   │   ├─→ 노드 실행 함수 실행
-    │   │   ├─→ LogClient.send_log_async(status="completed"/"failed")
+    │   │   ├─→ ExecutionLogClient.send_log_async(status="completed"/"failed")
     │   │   └─→ /api/logs/node-execution → DB 저장
     │   │
     │   ├─→ [스크립트 실행 완료]
@@ -67,7 +67,7 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 
 **처리 과정**:
 1. 실행 시작 시간 기록 (`started_at`)
-2. `LogClient.send_log_async()` 호출 (비동기, fire-and-forget)
+2. `ExecutionLogClient.send_log_async()` 호출 (비동기, fire-and-forget)
 3. 상태: `"running"`
 
 ```python
@@ -138,7 +138,7 @@ _ = asyncio.create_task(
 
 #### 1.3 로그 전송 및 저장
 
-**위치**: `server/utils/log_client.py`
+**위치**: `server/execution_logging/execution_log_client.py`
 
 ```python
 async def send_log_async(...):
@@ -147,7 +147,7 @@ async def send_log_async(...):
         await self.send_log(...)  # HTTP POST 요청
     except Exception as e:
         # 에러 발생 시 조용히 무시 (노드 실행에 영향 없음)
-        logger.debug(f"[LogClient] 로그 전송 실패 (무시됨): {e!s}")
+        logger.debug(f"[ExecutionLogClient] 로그 전송 실패 (무시됨): {e!s}")
 ```
 
 **API 엔드포인트**: `POST /api/logs/node-execution`
@@ -169,7 +169,7 @@ async def create_node_execution_log(request: NodeExecutionLogRequest):
 
 #### 1.4 로그 업데이트 로직
 
-**위치**: `server/db/node_execution_log_repository.py`
+**위치**: `server/execution_logging/execution_log_repository.py`
 
 **중요**: 중복 로그 방지를 위한 업데이트 로직
 
@@ -587,11 +587,12 @@ async def record_execution_summary(summary: dict):
 ### 서버
 
 - **노드 실행 래퍼**: `server/nodes/node_executor_wrapper.py`
-- **로그 클라이언트**: `server/utils/log_client.py`
+- **로그 클라이언트**: `server/execution_logging/execution_log_client.py`
+- **로그 모델**: `server/execution_logging/execution_log_models.py`
 - **로그 API 라우터**: `server/api/log_router.py`
 - **스크립트 API 라우터**: `server/api/script_router.py`
 - **대시보드 API 라우터**: `server/api/dashboard_router.py`
-- **로그 리포지토리**: `server/db/node_execution_log_repository.py`
+- **로그 리포지토리**: `server/execution_logging/execution_log_repository.py`
 - **로그 통계 리포지토리**: `server/db/log_stats_repository.py`
 
 ## 8. 체크리스트

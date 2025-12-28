@@ -79,6 +79,11 @@ export class NodeSettingsModal {
         // 이전 노드 출력 변수 목록 표시
         this.updatePreviousNodeVariables(nodeId);
 
+        // 엑셀 관련 노드인 경우 이전 노드 체인에 excel-open이 있는지 확인
+        setTimeout(async () => {
+            await this.checkExcelOpenRequirement(nodeType, nodeId);
+        }, 100);
+
         // field_path 또는 execution_id 필드 설정 (조건 노드, 엑셀 닫기 노드 등에서 사용)
         // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 설정
         setTimeout(() => {
@@ -188,41 +193,6 @@ export class NodeSettingsModal {
         }
 
         switch (detailNodeType) {
-            case 'http-api-request':
-                const url = nodeData?.url || '';
-                const method = nodeData?.method || 'GET';
-                const headers = nodeData?.headers || '{}';
-                const body = nodeData?.body || '';
-                const timeout = nodeData?.timeout || 30;
-
-                return `
-                    <div class="form-group node-settings-form-group">
-                        <label for="edit-http-url" class="node-settings-label">요청 URL:</label>
-                        <input type="text" id="edit-http-url" value="${escapeHtml(url)}" placeholder="https://api.example.com/endpoint" class="node-settings-input">
-                    </div>
-                    <div class="form-group node-settings-form-group">
-                        <label for="edit-http-method" class="node-settings-label">HTTP 메서드:</label>
-                        <select id="edit-http-method" class="node-settings-select">
-                            <option value="GET" ${method === 'GET' ? 'selected' : ''}>GET</option>
-                            <option value="POST" ${method === 'POST' ? 'selected' : ''}>POST</option>
-                            <option value="PUT" ${method === 'PUT' ? 'selected' : ''}>PUT</option>
-                            <option value="DELETE" ${method === 'DELETE' ? 'selected' : ''}>DELETE</option>
-                            <option value="PATCH" ${method === 'PATCH' ? 'selected' : ''}>PATCH</option>
-                        </select>
-                    </div>
-                    <div class="form-group node-settings-form-group">
-                        <label for="edit-http-headers" class="node-settings-label">HTTP 헤더 (JSON):</label>
-                        <textarea id="edit-http-headers" rows="3" placeholder='{"Content-Type": "application/json"}' class="node-settings-textarea">${escapeHtml(typeof headers === 'string' ? headers : JSON.stringify(headers, null, 2))}</textarea>
-                    </div>
-                    <div class="form-group node-settings-form-group">
-                        <label for="edit-http-body" class="node-settings-label">요청 본문 (JSON 또는 텍스트):</label>
-                        <textarea id="edit-http-body" rows="4" placeholder='{"key": "value"}' class="node-settings-textarea">${escapeHtml(typeof body === 'string' ? body : JSON.stringify(body, null, 2))}</textarea>
-                    </div>
-                    <div class="form-group node-settings-form-group">
-                        <label for="edit-http-timeout" class="node-settings-label">타임아웃 (초):</label>
-                        <input type="number" id="edit-http-timeout" value="${timeout}" min="1" max="300" class="node-settings-input">
-                    </div>
-                `;
             default:
                 return '';
         }
@@ -299,6 +269,29 @@ export class NodeSettingsModal {
             currentDetailNodeType
         });
 
+        // process-focus 노드의 경우 파라미터 폼을 생성하지 않고 프로세스 선택 UI만 표시
+        if (nodeType === 'process-focus') {
+            const processFocusHtml = `
+                <div class="form-group node-settings-form-group">
+                    <label for="edit-node-process-select">프로세스 선택:</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <select id="edit-node-process-select" class="node-settings-select" style="flex: 1;">
+                            <option value="">프로세스를 선택하세요</option>
+                        </select>
+                        <button type="button" id="edit-refresh-processes-btn" class="btn btn-secondary">새로고침</button>
+                    </div>
+                    <input type="hidden" id="edit-node-process-id">
+                    <input type="hidden" id="edit-node-process-hwnd">
+                    <input type="hidden" id="edit-node-process-name">
+                    <input type="hidden" id="edit-node-window-title">
+                    <small class="node-settings-help-text">화면에 보이는 프로세스만 표시됩니다. 선택한 프로세스가 실행 시 화면 최상단에 포커스됩니다.</small>
+                </div>
+            `;
+            // process-focus 노드는 파라미터 폼을 생성하지 않고 프로세스 선택 UI만 반환
+            console.log('[NodeSettingsModal] process-focus 노드: 프로세스 선택 UI만 반환');
+            return processFocusHtml;
+        }
+
         // 파라미터 기반 폼 생성
         // parameterFormHtml: 생성된 파라미터 폼 HTML 문자열
         let parameterFormHtml = '';
@@ -341,23 +334,23 @@ export class NodeSettingsModal {
                 // 이전 노드 확인
                 const nodeManager = this.workflowPage.getNodeManager();
                 if (nodeManager) {
-                    const previousNodes = this.getPreviousNodeChain(nodeData.id);
+                    const previousNodes = await this.getPreviousNodeChain(nodeData.id);
                     if (previousNodes.length > 0) {
                         const lastNode = previousNodes[previousNodes.length - 1];
                         const lastNodeData = lastNode.data || {};
                         if (lastNodeData.type === 'excel-open') {
-                            currentValues.execution_id = 'output.data.execution_id';
+                            currentValues.execution_id = 'outdata.output.execution_id';
                         } else {
                             // 이전 노드가 없거나 엑셀 열기 노드가 아니어도 기본값 설정
-                            currentValues.execution_id = 'output.data.execution_id';
+                            currentValues.execution_id = 'outdata.output.execution_id';
                         }
                     } else {
                         // 이전 노드가 없어도 기본값 설정
-                        currentValues.execution_id = 'output.data.execution_id';
+                        currentValues.execution_id = 'outdata.output.execution_id';
                     }
                 } else {
                     // nodeManager가 없어도 기본값 설정
-                    currentValues.execution_id = 'output.data.execution_id';
+                    currentValues.execution_id = 'outdata.output.execution_id';
                 }
             }
         }
@@ -382,6 +375,29 @@ export class NodeSettingsModal {
                 hasDetailTypes: !!config?.detailTypes,
                 currentDetailNodeType
             });
+        }
+
+        // process-focus 노드의 경우 파라미터 폼 대신 프로세스 선택 UI만 표시
+        if (nodeType === 'process-focus') {
+            const processFocusHtml = `
+                <div class="form-group node-settings-form-group">
+                    <label for="edit-node-process-select">프로세스 선택:</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <select id="edit-node-process-select" class="node-settings-select" style="flex: 1;">
+                            <option value="">프로세스를 선택하세요</option>
+                        </select>
+                        <button type="button" id="edit-refresh-processes-btn" class="btn btn-secondary">새로고침</button>
+                    </div>
+                    <input type="hidden" id="edit-node-process-id">
+                    <input type="hidden" id="edit-node-process-hwnd">
+                    <input type="hidden" id="edit-node-process-name">
+                    <input type="hidden" id="edit-node-window-title">
+                    <small class="node-settings-help-text">화면에 보이는 프로세스만 표시됩니다. 선택한 프로세스가 실행 시 화면 최상단에 포커스됩니다.</small>
+                </div>
+            `;
+            // process-focus 노드는 파라미터 폼을 생성하지 않고 프로세스 선택 UI만 반환
+            console.log('[NodeSettingsModal] process-focus 노드: 프로세스 선택 UI만 반환');
+            return processFocusHtml;
         }
 
         // 파라미터 폼이 생성된 경우 버튼 정보는 setupEventListeners에서 처리
@@ -449,9 +465,11 @@ export class NodeSettingsModal {
                 
                 <!-- 이전 노드 출력 변수 목록 -->
                 <div id="node-previous-output-variables" class="node-previous-output-variables" style="margin-bottom: 12px; display: none;">
-                    <div class="node-previous-output-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                        <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary, #666);">이전 노드 출력 변수:</span>
-                        <span id="node-previous-output-node-name" style="font-size: 12px; color: var(--primary-color, #2673ea); font-weight: 500;"></span>
+                    <div class="node-previous-output-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background-color: #e3f2fd; border-radius: 4px; border-left: 3px solid #2673ea;">
+                        <span style="font-size: 14px;">🔗</span>
+                        <span style="font-size: 12px; font-weight: 600; color: #2673ea;">이전 노드 출력 변수:</span>
+                        <span id="node-previous-output-node-name" style="font-size: 12px; color: var(--primary-color, #2673ea); font-weight: 600;"></span>
+                        <span style="font-size: 11px; color: #666; margin-left: auto;">클릭하여 변수 선택</span>
                     </div>
                     <div id="node-previous-output-variables-list" class="node-previous-output-variables-list" style="display: flex; flex-wrap: wrap; gap: 6px;">
                         <!-- 변수 태그들이 여기에 동적으로 추가됨 -->
@@ -542,6 +560,9 @@ export class NodeSettingsModal {
                 // 타입 변경 시 출력 미리보기도 업데이트
                 const updatedNodeData = getNodeData(nodeElement);
                 await this.updateOutputPreview(newType, updatedNodeData, nodeElement);
+
+                // 엑셀 관련 노드인 경우 이전 노드 체인에 excel-open이 있는지 확인
+                await this.checkExcelOpenRequirement(newType, nodeId);
             });
         }
 
@@ -611,21 +632,31 @@ export class NodeSettingsModal {
 
             if (fieldPathInput) {
                 console.log('[setupEventListeners] field_path 필드 찾음, setupFieldPathInput 호출');
-                this.setupFieldPathInput(nodeId, fieldPathInput);
+                // 파라미터 설정 가져오기
+                const registry = getNodeRegistry();
+                registry.getConfig(nodeType).then((config) => {
+                    const paramConfig = config?.parameters?.field_path || {};
+                    this.setupFieldPathInput(nodeId, fieldPathInput, paramConfig);
+                });
             } else {
                 console.log('[setupEventListeners] field_path 필드를 찾을 수 없음');
             }
 
             if (executionIdInput) {
                 console.log('[setupEventListeners] execution_id 필드 찾음, setupFieldPathInput 호출');
-                this.setupFieldPathInput(nodeId, executionIdInput);
+                // 파라미터 설정 가져오기
+                const registry = getNodeRegistry();
+                registry.getConfig(nodeType).then((config) => {
+                    const paramConfig = config?.parameters?.execution_id || {};
+                    this.setupFieldPathInput(nodeId, executionIdInput, paramConfig);
+                });
+            }
+
+            // process-focus 노드의 경우 프로세스 선택 UI 설정
+            if (nodeType === 'process-focus') {
+                this.setupProcessSelection(nodeData);
             }
         }, 100); // 지연 시간 증가
-
-        // 프로세스 선택 관련
-        if (nodeType === 'process-focus') {
-            this.setupProcessSelection(nodeData);
-        }
 
         // 저장 버튼
         const saveBtn = document.getElementById('edit-node-save');
@@ -731,11 +762,6 @@ export class NodeSettingsModal {
                     });
                 });
             }, 50);
-
-            // 프로세스 선택 설정
-            if (selectedType === 'process-focus') {
-                this.setupProcessSelection(nodeData);
-            }
 
             // 파라미터 폼의 모든 입력 필드에 이벤트 리스너 설정
             const nodeElement =
@@ -1051,7 +1077,7 @@ export class NodeSettingsModal {
 
             // 이전 노드의 실제 실행 결과 또는 스키마 기반 예시 생성
             // 이전 노드 체인 조회 (워크플로우에서 현재 노드 앞에 있는 노드들)
-            const previousNodes = this.getPreviousNodeChain(nodeId);
+            const previousNodes = await this.getPreviousNodeChain(nodeId);
             // 이전 노드가 있는 경우
             if (previousNodes.length > 0) {
                 // 노드 레지스트리 가져오기 (노드 설정 조회용)
@@ -1098,7 +1124,7 @@ export class NodeSettingsModal {
         }
 
         try {
-            const previousNodes = this.getPreviousNodeChain(nodeId);
+            const previousNodes = await this.getPreviousNodeChain(nodeId);
             if (previousNodes.length === 0) {
                 alert('이전 노드가 없습니다.');
                 return;
@@ -1504,7 +1530,7 @@ export class NodeSettingsModal {
     /**
      * 이전 노드 체인 가져오기 (시작 노드부터 현재 노드까지)
      */
-    getPreviousNodeChain(nodeId) {
+    async getPreviousNodeChain(nodeId) {
         const nodeManager = this.workflowPage.getNodeManager();
         if (!nodeManager || !nodeManager.connectionManager) {
             return [];
@@ -1547,8 +1573,9 @@ export class NodeSettingsModal {
                 element: previousNodeElement
             });
 
-            // 시작 노드에 도달하면 종료
-            if (previousNodeType === 'start' || previousNodeId === 'start') {
+            // 경계 노드에 도달하면 종료
+            const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+            if (previousNodeType && isBoundaryNodeSync(previousNodeType)) {
                 break;
             }
 
@@ -1696,21 +1723,6 @@ export class NodeSettingsModal {
         if (nodeType === 'wait' && !prepared.wait_time && nodeData.wait_time !== undefined) {
             prepared.wait_time = nodeData.wait_time;
         }
-        // process-focus
-        if (nodeType === 'process-focus') {
-            if (nodeData.process_id !== undefined) {
-                prepared.process_id = nodeData.process_id;
-            }
-            if (nodeData.hwnd !== undefined) {
-                prepared.hwnd = nodeData.hwnd;
-            }
-            if (nodeData.process_name) {
-                prepared.process_name = nodeData.process_name;
-            }
-            if (nodeData.window_title) {
-                prepared.window_title = nodeData.window_title;
-            }
-        }
         // condition
         if (nodeType === 'condition' && !prepared.condition && nodeData.condition) {
             prepared.condition = nodeData.condition;
@@ -1722,6 +1734,21 @@ export class NodeSettingsModal {
             }
             if (nodeData.y !== undefined) {
                 prepared.y = nodeData.y;
+            }
+        }
+        // process-focus
+        if (nodeType === 'process-focus') {
+            if (nodeData.process_id !== undefined) {
+                prepared.process_id = nodeData.process_id;
+            }
+            if (nodeData.hwnd !== undefined) {
+                prepared.hwnd = nodeData.hwnd;
+            }
+            if (nodeData.process_name !== undefined) {
+                prepared.process_name = nodeData.process_name;
+            }
+            if (nodeData.window_title !== undefined) {
+                prepared.window_title = nodeData.window_title;
             }
         }
 
@@ -1797,7 +1824,7 @@ export class NodeSettingsModal {
 
         try {
             // 이전 노드 체인 가져오기
-            const previousNodes = this.getPreviousNodeChain(nodeId);
+            const previousNodes = await this.getPreviousNodeChain(nodeId);
 
             if (previousNodes.length === 0) {
                 // 이전 노드가 없으면 숨김
@@ -1867,7 +1894,8 @@ export class NodeSettingsModal {
 
                 tag.innerHTML = `
                     <span class="node-output-variable-icon">${typeIcon}</span>
-                    <span class="node-output-variable-key">${escapeHtml(variable.key)}</span>
+                    <span style="color: #2673ea; font-weight: 600; font-size: 11px;">←</span>
+                    <span class="node-output-variable-key">outdata.output.${escapeHtml(variable.key)}</span>
                     <span class="node-output-variable-value">${escapeHtml(valuePreview)}</span>
                 `;
 
@@ -1883,7 +1911,7 @@ export class NodeSettingsModal {
                             executionIdInput.dispatchEvent(new Event('input', { bubbles: true }));
                         } else {
                             // 다른 변수인 경우 경로 형태로 삽입
-                            executionIdInput.value = `output.${variable.key}`;
+                            executionIdInput.value = `outdata.output.${variable.key}`;
                             executionIdInput.dispatchEvent(new Event('input', { bubbles: true }));
                         }
                         return;
@@ -1927,21 +1955,30 @@ export class NodeSettingsModal {
 
     /**
      * field_path 입력 필드 설정 (이전 노드 출력 변수 목록 추가)
+     * 드롭다운 + 입력 하이브리드 및 타입 검증 지원
      *
      * @param {string} nodeId - 현재 노드 ID
      * @param {HTMLElement} fieldPathInput - field_path 입력 필드 요소
+     * @param {Object} paramConfig - 파라미터 설정 객체 (타입 검증용)
      */
-    async setupFieldPathInput(nodeId, fieldPathInput) {
+    async setupFieldPathInput(nodeId, fieldPathInput, paramConfig = {}) {
         if (!fieldPathInput) {
             console.log('[setupFieldPathInput] fieldPathInput이 없습니다.');
             return;
         }
 
-        console.log('[setupFieldPathInput] 시작:', { nodeId, fieldId: fieldPathInput.id });
+        console.log('[setupFieldPathInput] 시작:', { nodeId, fieldId: fieldPathInput.id, paramConfig });
 
         const datalistId = fieldPathInput.getAttribute('list');
         const datalist = datalistId ? document.getElementById(datalistId) : null;
         const expandBtn = document.getElementById(`${fieldPathInput.id}-expand-btn`);
+        const dropdown = document.getElementById(`${fieldPathInput.id}-dropdown`);
+        const typeWarning = document.getElementById(`${fieldPathInput.id}-type-warning`);
+
+        // 파라미터 타입 정보 (타입 검증용)
+        const paramType = paramConfig.type || 'string';
+        const allowedTypes = paramConfig.allowed_types || [];
+        const validateType = paramConfig.validate_type !== false; // 기본값 true
 
         console.log('[setupFieldPathInput] 요소 찾기:', {
             datalistId,
@@ -2039,25 +2076,164 @@ export class NodeSettingsModal {
             if (expandBtn) {
                 expandBtn.style.display = 'none';
             }
+            if (dropdown) {
+                dropdown.innerHTML = '<option value="">변수 선택...</option>';
+            }
             return;
         }
 
-        // datalist에 경로 목록 추가
+        // 이전 노드 출력 변수 수집 (드롭다운 및 타입 검증용)
+        const previousNodes = await this.getPreviousNodeChain(nodeId);
+        const nodeVariables = collectPreviousNodeVariables(previousNodes);
+
+        // 변수 타입 매핑 함수
+        const getVariableType = (value) => {
+            if (value === null) {
+                return 'null';
+            }
+            if (Array.isArray(value)) {
+                return 'array';
+            }
+            if (typeof value === 'object') {
+                return 'object';
+            }
+            return typeof value;
+        };
+
+        // 타입 호환성 검사 함수
+        const isTypeCompatible = (variableType, expectedType) => {
+            if (!validateType || expectedType === 'string' || expectedType === 'any') {
+                return true;
+            }
+
+            // 타입 매핑
+            const typeMap = {
+                number: ['number', 'integer'],
+                integer: ['number', 'integer'],
+                string: ['string'],
+                boolean: ['boolean'],
+                array: ['array'],
+                object: ['object']
+            };
+
+            const compatibleTypes = typeMap[expectedType] || [expectedType];
+            return compatibleTypes.includes(variableType);
+        };
+
+        // datalist에 경로 목록 추가 (타입 필터링 적용)
         if (datalist) {
             datalist.innerHTML = '';
 
-            // 모든 경로를 datalist에 추가
+            // 모든 경로를 datalist에 추가 (타입 필터링)
             allPaths.forEach((path) => {
+                // 경로에서 실제 변수 찾기
+                let variable = null;
+                let variableType = null;
+
+                // 이전 노드 출력에서 변수 찾기
+                for (const { variables: vars } of nodeVariables) {
+                    const foundVar = vars.find((v) => {
+                        const varPath = `outdata.output.${v.key}`;
+                        return varPath === path || path.endsWith(`.${v.key}`);
+                    });
+                    if (foundVar) {
+                        variable = foundVar;
+                        variableType = foundVar.type;
+                        break;
+                    }
+                }
+
+                // 타입 검증이 활성화되어 있고 타입이 호환되지 않으면 제외
+                if (validateType && variableType && !isTypeCompatible(variableType, paramType)) {
+                    return;
+                }
+
                 if (!Array.from(datalist.children).some((opt) => opt.value === path)) {
                     const option = document.createElement('option');
                     option.value = path;
+                    // 변수 타입 정보를 data 속성에 저장
+                    if (variableType) {
+                        option.dataset.variableType = variableType;
+                    }
                     datalist.appendChild(option);
                 }
             });
         }
 
+        // 드롭다운에 변수 목록 추가 (타입 필터링 및 그룹화)
+        if (dropdown) {
+            dropdown.innerHTML = '<option value="">← 이전 노드에서 선택...</option>';
+
+            // 노드별로 그룹화하여 추가
+            nodeVariables.forEach(({ nodeName, nodeType, variables }) => {
+                // 타입 필터링
+                const filteredVars = variables.filter((v) => {
+                    if (!validateType) {
+                        return true;
+                    }
+                    return isTypeCompatible(v.type, paramType);
+                });
+
+                if (filteredVars.length === 0) {
+                    return;
+                }
+
+                // 옵션 그룹 생성 (이전 노드임을 명확히 표시)
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = `← 이전 노드: ${nodeName} (${nodeType})`;
+
+                filteredVars.forEach((variable) => {
+                    const option = document.createElement('option');
+                    const path = `outdata.output.${variable.key}`;
+                    option.value = path;
+                    option.dataset.variableType = variable.type;
+                    option.dataset.variableKey = variable.key;
+
+                    // 변수 값 미리보기 (최대 30자)
+                    let valuePreview = String(variable.value);
+                    if (valuePreview.length > 30) {
+                        valuePreview = valuePreview.substring(0, 30) + '...';
+                    }
+
+                    // 타입 아이콘
+                    let typeIcon = '📄';
+                    if (variable.type === 'string') {
+                        typeIcon = '📝';
+                    } else if (variable.type === 'number' || variable.type === 'integer') {
+                        typeIcon = '🔢';
+                    } else if (variable.type === 'boolean') {
+                        typeIcon = '✓';
+                    } else if (variable.type === 'array') {
+                        typeIcon = '📋';
+                    } else if (variable.type === 'object') {
+                        typeIcon = '📦';
+                    }
+
+                    // 이전 노드임을 명확히 표시
+                    option.textContent = `← ${typeIcon} ${variable.key} (${valuePreview})`;
+                    optgroup.appendChild(option);
+                });
+
+                dropdown.appendChild(optgroup);
+            });
+
+            // 드롭다운 변경 이벤트 처리
+            dropdown.addEventListener('change', (e) => {
+                const selectedPath = e.target.value;
+                if (selectedPath) {
+                    fieldPathInput.value = selectedPath;
+                    fieldPathInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    // 타입 검증
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    const variableType = selectedOption.dataset.variableType;
+                    this.validateParameterType(fieldPathInput, variableType, paramType, typeWarning);
+                }
+            });
+        }
+
         // 입력 데이터 변경 시 경로 목록 업데이트
-        const updatePathsFromInput = () => {
+        const updatePathsFromInput = async () => {
             // inputPreview를 다시 찾아서 최신 값 사용
             const currentInputPreview = document.getElementById('node-input-preview');
             if (!currentInputPreview) {
@@ -2074,12 +2250,19 @@ export class NodeSettingsModal {
                     if (expandBtn) {
                         expandBtn.style.display = 'none';
                     }
+                    if (dropdown) {
+                        dropdown.innerHTML = '<option value="">변수 선택...</option>';
+                    }
                     allPaths = [];
                     return;
                 }
 
                 const newInputData = JSON.parse(inputText);
                 const newPaths = [];
+
+                // 이전 노드 변수 다시 수집 (업데이트용)
+                const updatedPreviousNodes = await this.getPreviousNodeChain(nodeId);
+                const updatedNodeVariables = collectPreviousNodeVariables(updatedPreviousNodes);
 
                 // 재귀 함수 (로컬 스코프)
                 const addNestedPathsLocal = (obj, prefix = '') => {
@@ -2113,13 +2296,83 @@ export class NodeSettingsModal {
 
                 addNestedPathsLocal(newInputData);
 
-                // datalist 업데이트
+                // datalist 업데이트 (타입 필터링 적용)
                 if (datalist) {
                     datalist.innerHTML = '';
                     newPaths.forEach((path) => {
+                        // 경로에서 실제 변수 찾기
+                        let variableType = null;
+                        for (const { variables: vars } of updatedNodeVariables) {
+                            const foundVar = vars.find((v) => {
+                                const varPath = `outdata.output.${v.key}`;
+                                return varPath === path || path.endsWith(`.${v.key}`);
+                            });
+                            if (foundVar) {
+                                variableType = foundVar.type;
+                                break;
+                            }
+                        }
+
+                        // 타입 검증이 활성화되어 있고 타입이 호환되지 않으면 제외
+                        if (validateType && variableType && !isTypeCompatible(variableType, paramType)) {
+                            return;
+                        }
+
                         const option = document.createElement('option');
                         option.value = path;
+                        if (variableType) {
+                            option.dataset.variableType = variableType;
+                        }
                         datalist.appendChild(option);
+                    });
+                }
+
+                // 드롭다운도 업데이트
+                if (dropdown) {
+                    dropdown.innerHTML = '<option value="">← 이전 노드에서 선택...</option>';
+                    updatedNodeVariables.forEach(({ nodeName, nodeType, variables }) => {
+                        const filteredVars = variables.filter((v) => {
+                            if (!validateType) {
+                                return true;
+                            }
+                            return isTypeCompatible(v.type, paramType);
+                        });
+                        if (filteredVars.length === 0) {
+                            return;
+                        }
+
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = `← 이전 노드: ${nodeName} (${nodeType})`;
+                        filteredVars.forEach((variable) => {
+                            const option = document.createElement('option');
+                            const path = `outdata.output.${variable.key}`;
+                            option.value = path;
+                            option.dataset.variableType = variable.type;
+                            option.dataset.variableKey = variable.key;
+
+                            let valuePreview = String(variable.value);
+                            if (valuePreview.length > 30) {
+                                valuePreview = valuePreview.substring(0, 30) + '...';
+                            }
+
+                            let typeIcon = '📄';
+                            if (variable.type === 'string') {
+                                typeIcon = '📝';
+                            } else if (variable.type === 'number' || variable.type === 'integer') {
+                                typeIcon = '🔢';
+                            } else if (variable.type === 'boolean') {
+                                typeIcon = '✓';
+                            } else if (variable.type === 'array') {
+                                typeIcon = '📋';
+                            } else if (variable.type === 'object') {
+                                typeIcon = '📦';
+                            }
+
+                            // 이전 노드임을 명확히 표시
+                            option.textContent = `← ${typeIcon} ${variable.key} (${valuePreview})`;
+                            optgroup.appendChild(option);
+                        });
+                        dropdown.appendChild(optgroup);
                     });
                 }
 
@@ -2172,6 +2425,20 @@ export class NodeSettingsModal {
             fieldPathInput.addEventListener('input', (e) => {
                 const inputValue = e.target.value;
                 console.log('[자동완성] 입력 이벤트:', { inputValue, allPathsCount: allPaths.length });
+
+                // 타입 검증 (경로 문자열인 경우)
+                if (inputValue.startsWith('outdata.output.')) {
+                    const variableKey = inputValue.replace('outdata.output.', '');
+                    const variable = nodeVariables.flatMap((nv) => nv.variables).find((v) => v.key === variableKey);
+
+                    if (variable) {
+                        this.validateParameterType(fieldPathInput, variable.type, paramType, typeWarning);
+                    } else {
+                        this.hideTypeWarning(typeWarning);
+                    }
+                } else {
+                    this.hideTypeWarning(typeWarning);
+                }
 
                 if (!inputValue || allPaths.length === 0) {
                     console.log('[자동완성] 입력값이 없거나 경로가 없음');
@@ -2226,6 +2493,25 @@ export class NodeSettingsModal {
                     autocompletePreview.textContent = '';
                     currentSuggestion = '';
                 }, 200);
+            });
+
+            // 입력 필드 변경 시 타입 검증
+            fieldPathInput.addEventListener('input', () => {
+                const inputValue = fieldPathInput.value;
+
+                // 경로 문자열인 경우 변수 타입 찾기
+                if (inputValue.startsWith('outdata.output.')) {
+                    const variableKey = inputValue.replace('outdata.output.', '');
+                    const variable = nodeVariables.flatMap((nv) => nv.variables).find((v) => v.key === variableKey);
+
+                    if (variable) {
+                        this.validateParameterType(fieldPathInput, variable.type, paramType, typeWarning);
+                    } else {
+                        this.hideTypeWarning(typeWarning);
+                    }
+                } else {
+                    this.hideTypeWarning(typeWarning);
+                }
             });
 
             console.log('[setupFieldPathInput] 자동완성 이벤트 리스너 설정 완료');
@@ -2455,6 +2741,73 @@ export class NodeSettingsModal {
     }
 
     /**
+     * 파라미터 타입 검증 및 경고 표시
+     *
+     * @param {HTMLElement} inputElement - 입력 필드 요소
+     * @param {string} variableType - 변수 타입
+     * @param {string} paramType - 파라미터 타입
+     * @param {HTMLElement} warningElement - 경고 메시지 요소
+     */
+    validateParameterType(inputElement, variableType, paramType, warningElement) {
+        if (!warningElement || !inputElement) {
+            return;
+        }
+
+        // 타입 검증이 비활성화되어 있으면 경고 숨김
+        if (paramType === 'string' || paramType === 'any') {
+            this.hideTypeWarning(warningElement);
+            return;
+        }
+
+        // 타입 호환성 검사
+        const typeMap = {
+            number: ['number', 'integer'],
+            integer: ['number', 'integer'],
+            string: ['string'],
+            boolean: ['boolean'],
+            array: ['array'],
+            object: ['object']
+        };
+
+        const compatibleTypes = typeMap[paramType] || [paramType];
+        const isCompatible = compatibleTypes.includes(variableType);
+
+        if (!isCompatible) {
+            // 타입 불일치 경고 표시
+            const typeLabels = {
+                number: '숫자',
+                integer: '정수',
+                string: '문자열',
+                boolean: '불린',
+                array: '배열',
+                object: '객체'
+            };
+
+            const variableTypeLabel = typeLabels[variableType] || variableType;
+            const paramTypeLabel = typeLabels[paramType] || paramType;
+
+            warningElement.textContent = `⚠️ 타입 불일치: 변수 타입은 "${variableTypeLabel}"이지만 파라미터는 "${paramTypeLabel}" 타입을 기대합니다.`;
+            warningElement.style.display = 'block';
+            inputElement.style.borderColor = '#ffc107';
+        } else {
+            this.hideTypeWarning(warningElement);
+            inputElement.style.borderColor = '';
+        }
+    }
+
+    /**
+     * 타입 경고 숨기기
+     *
+     * @param {HTMLElement} warningElement - 경고 메시지 요소
+     */
+    hideTypeWarning(warningElement) {
+        if (warningElement) {
+            warningElement.style.display = 'none';
+            warningElement.textContent = '';
+        }
+    }
+
+    /**
      * 파라미터 폼의 모든 입력 필드에 이벤트 리스너 설정
      * 파라미터 변경 시 입력/출력 미리보기를 자동으로 업데이트합니다.
      * @param {HTMLElement} nodeElement - 노드 DOM 요소 (노드 데이터 추출용)
@@ -2511,5 +2864,101 @@ export class NodeSettingsModal {
             allInputs.length,
             '개 필드'
         );
+    }
+
+    /**
+     * 엑셀 관련 노드가 이전 노드 체인에 excel-open이 있는지 확인하고 경고 표시
+     * @param {string} nodeType - 현재 노드 타입
+     * @param {string} nodeId - 현재 노드 ID
+     */
+    async checkExcelOpenRequirement(nodeType, nodeId) {
+        // 노드 레지스트리에서 엑셀 관련 노드 목록 동적으로 가져오기
+        const registry = getNodeRegistry();
+        const allConfigs = await registry.getAllConfigs();
+
+        // excel-로 시작하는 노드 타입들을 찾되, excel-open은 제외
+        const excelNodesRequiringOpen = Object.keys(allConfigs).filter(
+            (nodeTypeKey) => nodeTypeKey.startsWith('excel-') && nodeTypeKey !== 'excel-open'
+        );
+
+        // 엑셀 관련 노드가 아니면 검증 불필요
+        if (!excelNodesRequiringOpen.includes(nodeType)) {
+            // 기존 경고 메시지 제거
+            this.removeExcelOpenWarning();
+            return;
+        }
+
+        // 이전 노드 체인 가져오기
+        const previousNodes = await this.getPreviousNodeChain(nodeId);
+
+        // 이전 노드 체인에 excel-open이 있는지 확인
+        const hasExcelOpen = previousNodes.some((node) => node.type === 'excel-open');
+
+        if (!hasExcelOpen) {
+            // 경고 메시지 표시
+            this.showExcelOpenWarning(nodeType);
+        } else {
+            // 경고 메시지 제거
+            this.removeExcelOpenWarning();
+        }
+    }
+
+    /**
+     * 엑셀 열기 노드 필요 경고 메시지 표시
+     * @param {string} nodeType - 현재 노드 타입
+     */
+    showExcelOpenWarning(nodeType) {
+        // 기존 경고 메시지 제거
+        this.removeExcelOpenWarning();
+
+        // 노드 타입에 따른 라벨 가져오기
+        const nodeLabel = NODE_TYPE_LABELS[nodeType] || nodeType;
+
+        // 경고 메시지 HTML 생성
+        const warningHtml = `
+            <div id="excel-open-requirement-warning" class="excel-open-requirement-warning" style="margin-top: 12px; padding: 12px; background-color: #fff3cd; border: 2px solid #ffc107; border-radius: 6px; border-left: 4px solid #ff9800;">
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="font-size: 18px; flex-shrink: 0;">⚠️</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #856404; margin-bottom: 4px; font-size: 14px;">
+                            엑셀 열기 노드가 필요합니다
+                        </div>
+                        <div style="font-size: 12px; color: #856404; line-height: 1.5;">
+                            <strong>${nodeLabel}</strong> 노드는 실행되기 전에 <strong>엑셀 열기</strong> 노드가 이전 노드 체인에 있어야 합니다.
+                            <br>
+                            현재 이전 노드 체인에 엑셀 열기 노드가 없습니다. 엑셀 열기 노드를 추가하거나 이 노드 앞에 연결해주세요.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 노드 타입 선택란 다음에 경고 메시지 삽입
+        const nodeTypeGroup = document.querySelector('.form-group.node-settings-form-group:has(#edit-node-type)');
+        if (nodeTypeGroup) {
+            nodeTypeGroup.insertAdjacentHTML('afterend', warningHtml);
+        } else {
+            // 노드 타입 그룹을 찾을 수 없으면 상세 노드 타입 그룹 다음에 삽입
+            const detailNodeTypeGroup = document.getElementById('edit-detail-node-type-group');
+            if (detailNodeTypeGroup) {
+                detailNodeTypeGroup.insertAdjacentHTML('afterend', warningHtml);
+            } else {
+                // 그것도 없으면 타입별 설정 영역 앞에 삽입
+                const typeSettings = document.getElementById('edit-node-type-settings');
+                if (typeSettings) {
+                    typeSettings.insertAdjacentHTML('beforebegin', warningHtml);
+                }
+            }
+        }
+    }
+
+    /**
+     * 엑셀 열기 노드 필요 경고 메시지 제거
+     */
+    removeExcelOpenWarning() {
+        const warning = document.getElementById('excel-open-requirement-warning');
+        if (warning) {
+            warning.remove();
+        }
     }
 }

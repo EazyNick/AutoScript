@@ -6,13 +6,8 @@
 from typing import Any
 
 # 노드 타입별 실제 노드 종류 매핑
-ACTION_NODE_TYPES = {
+ACTION_NODE_TYPES: dict[str, dict[str, Any]] = {
     "action": {
-        "http-api-request": {
-            "label": "HTTP API 요청",
-            "description": "외부 API에 HTTP 요청을 보냅니다.",
-            "handler": "http-api-request",
-        }
         # 향후 추가될 액션 노드들:
         # "file-read": {...},
         # "file-write": {...},

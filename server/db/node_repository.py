@@ -48,7 +48,8 @@ class NodeRepository:
                 SELECT id, node_id, node_type, position_x, position_y, node_data,
                        connected_to, connected_from,
                        COALESCE(parameters, '{}') as parameters, description,
-                       created_at, updated_at
+                       created_at, updated_at,
+                       is_connected, connection_sequence, node_identifier
                 FROM nodes
                 WHERE script_id = ?
                 ORDER BY id
@@ -63,7 +64,7 @@ class NodeRepository:
             for row in cursor.fetchall():
                 # SELECT 순서: id(0), node_id(1), node_type(2), position_x(3), position_y(4),
                 #              node_data(5), connected_to(6), connected_from(7), parameters(8), description(9),
-                #              created_at(10), updated_at(11)
+                #              created_at(10), updated_at(11), is_connected(12), connection_sequence(13), node_identifier(14)
                 node_type = row[2]
 
                 # nodes_config.py에 정의되지 않은 노드는 제외
@@ -79,6 +80,9 @@ class NodeRepository:
                 description = row[9] if len(row) > 9 else None
                 created_at = row[10] if len(row) > 10 else None
                 updated_at = row[11] if len(row) > 11 else None
+                is_connected = bool(row[12]) if len(row) > 12 and row[12] is not None else None
+                connection_sequence = row[13] if len(row) > 13 else None
+                node_identifier = row[14] if len(row) > 14 else None
 
                 connected_to = self._parse_json_field(connected_to_raw, [])
                 connected_from = self._parse_json_field(connected_from_raw, [])
@@ -113,6 +117,10 @@ class NodeRepository:
                         "parameters": parameters,
                         "description": description,
                         "_db_id": db_id,  # 내부적으로 DB id 저장
+                        # 연결 정보 추가
+                        "is_connected": is_connected,
+                        "connection_sequence": connection_sequence,
+                        "node_identifier": node_identifier,
                     }
                 )
 
@@ -303,10 +311,15 @@ class NodeRepository:
             node_data = node.get("data", {}).copy()
             node_data.pop("color", None)
 
+            # 연결 정보 추출 (프론트엔드에서 전달된 값 사용)
+            is_connected = node.get("is_connected")
+            connection_sequence = node.get("connection_sequence")
+            node_identifier = node.get("node_identifier")
+
             cursor.execute(
                 """
-                INSERT INTO nodes (script_id, node_id, node_type, position_x, position_y, node_data, connected_to, connected_from, parameters, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO nodes (script_id, node_id, node_type, position_x, position_y, node_data, connected_to, connected_from, parameters, description, is_connected, connection_sequence, node_identifier)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     script_id,
@@ -319,6 +332,9 @@ class NodeRepository:
                     connected_from_json,
                     parameters_json,
                     description,
+                    1 if is_connected else 0 if is_connected is False else None,
+                    connection_sequence,
+                    node_identifier,
                 ),
             )
 

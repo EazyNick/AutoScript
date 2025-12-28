@@ -177,6 +177,8 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
 }
 ```
 
+> **자세한 내용**: UI에서 사용자가 파라미터를 선택할 수 있도록 하는 방법은 [파라미터 선택 옵션 가이드](./parameter-choices-guide.md)를 참고하세요.
+
 ### 특수 파라미터
 
 - **folder_path**: 폴더 선택 버튼이 자동으로 추가됩니다
@@ -391,10 +393,14 @@ if not some_condition:
     )
 ```
 
-실제 예시 (`server/nodes/actionnodes/click.py`):
+실제 예시 (`server/nodes/waitnodes/wait.py`):
 
 ```python
-return {"action": "click", "status": "completed", "output": {"x": x, "y": y}}
+return {
+    "action": "wait",
+    "status": "completed",
+    "output": {"wait_time": wait_time}
+}
 ```
 
 ## 4. JavaScript 렌더링 파일 생성
@@ -629,8 +635,8 @@ python scripts/validate-nodes.py
 
 ### Python (서버)
 - `server/config/nodes_config.py`: 노드 설정 파일 (실제 예시)
-- `server/nodes/actionnodes/click.py`: 클릭 노드 구현 예시
-- `server/nodes/actionnodes/process_focus.py`: 프로세스 포커스 노드 구현 예시 (복잡한 로직)
+- `server/nodes/waitnodes/wait.py`: 대기 노드 구현 예시 (간단한 로직)
+- `server/nodes/processnodes/process_focus.py`: 프로세스 포커스 노드 구현 예시 (복잡한 로직)
 - `server/nodes/base_node.py`: 기본 노드 클래스
 - `server/nodes/node_executor_wrapper.py`: 노드 실행 래퍼 (자동 에러 처리, 로깅 등)
 - `server/utils/__init__.py`: 유틸리티 함수 (`get_parameter`, `create_failed_result` 등)

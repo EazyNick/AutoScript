@@ -18,10 +18,9 @@ from models import (
     StandardResponseType,
 )
 from models.response_models import ListResponse, SuccessResponse
-from services.action_service import ActionService
+from services import action_service
 
 router = APIRouter(prefix="/api", tags=["scripts"])
-action_service = ActionService()
 logger = log_manager.logger
 
 

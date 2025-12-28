@@ -21,7 +21,12 @@ cd UI && npm install                        # JavaScript 린팅 도구 (ESLint, 
 
 **Python 린팅 환경 설정**
 
+> **중요**: 가상환경 이름은 반드시 `venv`로 생성해야 합니다. 다른 이름을 사용하면 자동 스크립트(`lint-all.bat` 등)가 가상환경을 찾지 못할 수 있습니다.
+
 ```bash
+# 가상환경 생성 (아직 없다면)
+python -m venv venv
+
 # 가상환경 활성화 (Windows)
 venv\Scripts\activate
 
@@ -41,7 +46,26 @@ npm install
 
 ## 린팅 테스트
 
-### Python 린팅 테스트
+### 자동 린팅 스크립트 사용 (권장) ⚡
+
+프로젝트 루트에서 `scripts/lint-all.bat` 파일을 실행하면 Python과 JavaScript 코드의 린팅과 포매팅을 자동으로 실행합니다:
+
+```bash
+scripts\lint-all.bat
+```
+
+**자동 린팅 스크립트 기능:**
+- Python 린팅 및 포매팅 (ruff)
+- Python 타입 체크 (mypy)
+- JavaScript 린팅 및 포매팅 (ESLint, Prettier)
+- 가상환경 자동 감지 및 활성화 (`venv` 폴더 우선 검색)
+- 프로젝트 루트 자동 감지
+
+> **중요**: 가상환경 이름은 반드시 `venv`로 생성해야 합니다. `lint-all.bat`가 `venv` 폴더를 우선적으로 찾습니다.
+
+### 수동 린팅 실행
+
+#### Python 린팅 테스트
 
 ```bash
 # 린팅 검사
@@ -60,7 +84,7 @@ ruff format --check server/
 mypy server/
 ```
 
-### JavaScript 린팅 테스트
+#### JavaScript 린팅 테스트
 
 ```bash
 # UI 디렉토리로 이동
@@ -90,7 +114,12 @@ npm run format:check
 
 코드를 기여하기 전에 다음을 확인하세요:
 
-### Python 코드
+### 빠른 방법 (권장) ⚡
+- [ ] `scripts\lint-all.bat` 실행하여 모든 린팅 및 포매팅 자동 실행
+
+### 수동 방법
+
+#### Python 코드
 - [ ] `ruff check --fix server/` 실행하여 자동 수정 가능한 문제 해결
 - [ ] `ruff format server/` 실행하여 코드 포매팅
 - [ ] `ruff check server/` 실행하여 남은 문제가 없는지 확인
@@ -99,7 +128,7 @@ npm run format:check
 
 자세한 내용은 [Python 린팅 가이드](../lint/python-linting.md)를 참고하세요.
 
-### JavaScript 코드
+#### JavaScript 코드
 - [ ] `cd UI && npm install` 실행하여 의존성 설치 (최초 1회만)
 - [ ] `cd UI && npm run lint:fix` 실행하여 자동 수정 가능한 문제 해결
 - [ ] `cd UI && npm run format` 실행하여 코드 포매팅

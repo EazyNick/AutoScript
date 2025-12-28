@@ -63,6 +63,9 @@ CREATE TABLE nodes (
     connected_from TEXT DEFAULT '[]',
     parameters TEXT DEFAULT '{}',
     description TEXT,
+    is_connected INTEGER DEFAULT 0,
+    connection_sequence INTEGER,
+    node_identifier TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (script_id) REFERENCES scripts (id) ON DELETE CASCADE
@@ -80,6 +83,9 @@ CREATE TABLE nodes (
 - `connected_from`: 연결 출처 노드 목록 (JSON 배열)
 - `parameters`: 노드 파라미터 (JSON 객체)
 - `description`: 노드 설명
+- `is_connected`: 노드가 다른 노드와 연결되어 있는지 여부 (0: 미연결, 1: 연결됨)
+- `connection_sequence`: 연결된 노드 체인에서의 순서 (0부터 시작, NULL: 연결되지 않음)
+- `node_identifier`: 노드 식별자 문자열 (로그 출력용, 예: "이미지 터치 (image-touch) #2/5 ID:node1")
 - `updated_at`: 수정 시간
 - `created_at`: 생성 시간
 
@@ -90,6 +96,8 @@ CREATE TABLE nodes (
 - `idx_nodes_script_id`: 스크립트별 노드 조회 최적화
 - `idx_nodes_type`: 노드 타입별 조회 최적화
 - `idx_nodes_script_type`: 스크립트 + 타입 복합 인덱스
+- `idx_nodes_connection_seq`: 연결 순서별 조회 최적화
+- `idx_nodes_is_connected`: 연결 상태별 필터링 최적화
 
 **JSON 필드 형식:**
 
@@ -173,6 +181,9 @@ CREATE TABLE node_execution_logs (
     result TEXT DEFAULT '{}',
     error_message TEXT,
     error_traceback TEXT,
+    is_connected INTEGER DEFAULT 0,
+    connection_sequence INTEGER,
+    node_identifier TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
 )
@@ -193,6 +204,9 @@ CREATE TABLE node_execution_logs (
 - `result`: 실행 결과 (JSON 문자열)
 - `error_message`: 에러 메시지 (실패 시)
 - `error_traceback`: 에러 스택 트레이스 (실패 시)
+- `is_connected`: 노드가 다른 노드와 연결되어 있는지 여부 (0: 미연결, 1: 연결됨)
+- `connection_sequence`: 연결된 노드 체인에서의 순서 (0부터 시작, NULL: 연결되지 않음)
+- `node_identifier`: 노드 식별자 문자열 (로그 출력용, 예: "이미지 터치 (image-touch) #2/5 ID:node1")
 - `created_at`: 로그 생성 시간
 
 **인덱스:**

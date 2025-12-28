@@ -4,7 +4,7 @@
 
 > ✅ **완료**: 
 > - 환경 변수 노출 문제는 이미 해결되었습니다. (`server/main.py`, `server/api/config_router.py`, `UI/src/js/utils/logger.js`)
-> - 입력 검증 강화는 이미 해결되었습니다. (`server/models/action_models.py`, `server/nodes/actionnodes/http_api_request.py`, `server/api/action_router.py`)
+> - 입력 검증 강화는 이미 해결되었습니다. (`server/models/action_models.py`, `server/api/action_router.py`)
 
 ## 1. 의존성 취약점 스캔
 

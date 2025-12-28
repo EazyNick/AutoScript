@@ -73,7 +73,7 @@ export class ConnectionEventHandler {
      * 노드 커넥터 클릭 이벤트 바인딩
      * 중복 등록 방지를 위해 데이터 속성으로 바인딩 여부 확인
      */
-    bindNodeConnector(nodeElement) {
+    async bindNodeConnector(nodeElement) {
         const logger = getLogger();
         const nodeId = nodeElement.dataset.nodeId;
 
@@ -125,9 +125,11 @@ export class ConnectionEventHandler {
 
             logger.log('[ConnectionManager] 입력 커넥터 바인딩 완료:', nodeId);
         } else {
-            // 시작 노드는 입력이 없으므로 경고 출력하지 않음
-            const nodeType = nodeElement.dataset.nodeType || (nodeId === 'start' ? 'start' : null);
-            if (nodeType !== 'start' && nodeId !== 'start') {
+            // 경계 노드는 입력이 없으므로 경고 출력하지 않음
+            const nodeType = nodeElement.dataset.nodeType || null;
+            // 경계 노드인지 확인 (동기적 체크)
+            const { isBoundaryNodeSync } = await import('../../../pages/workflow/constants/node-types.js');
+            if (!isBoundaryNodeSync(nodeType)) {
                 logger.warn('[ConnectionManager] 입력 커넥터를 찾을 수 없습니다:', nodeId);
             }
         }

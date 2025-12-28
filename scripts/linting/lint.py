@@ -115,26 +115,39 @@ def run_command(command: list[str], description: str) -> bool:
             errors="replace",
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
+        # stdout 출력 (성공 메시지 등)
         if result.stdout:
             try:
-                print(result.stdout)
+                print(result.stdout, end="")
             except UnicodeEncodeError:
                 # Windows 인코딩 문제 해결
-                print(result.stdout.encode("utf-8", errors="replace").decode("utf-8", errors="replace"))
+                print(result.stdout.encode("utf-8", errors="replace").decode("utf-8", errors="replace"), end="")
+        # stderr도 출력 (일부 도구는 stderr로 정보를 출력)
+        if result.stderr:
+            try:
+                print(result.stderr, end="", file=sys.stderr)
+            except UnicodeEncodeError:
+                print(result.stderr.encode("utf-8", errors="replace").decode("utf-8", errors="replace"), end="", file=sys.stderr)
         print_color(f"[OK] {description} 완료", Colors.GREEN)
         return True
     except subprocess.CalledProcessError as e:
         print_color(f"[FAIL] {description} 실패", Colors.RED)
+        # stdout 출력 (일부 도구는 stdout으로 에러 출력)
         if e.stdout:
             try:
-                print(e.stdout)
+                print(e.stdout, end="")
             except UnicodeEncodeError:
-                print(e.stdout.encode("utf-8", errors="replace").decode("utf-8", errors="replace"))
+                print(e.stdout.encode("utf-8", errors="replace").decode("utf-8", errors="replace"), end="")
+        # stderr 출력 (대부분의 도구는 stderr로 에러 출력)
         if e.stderr:
             try:
-                print(e.stderr)
+                print(e.stderr, end="", file=sys.stderr)
             except UnicodeEncodeError:
-                print(e.stderr.encode("utf-8", errors="replace").decode("utf-8", errors="replace"))
+                print(e.stderr.encode("utf-8", errors="replace").decode("utf-8", errors="replace"), end="", file=sys.stderr)
+        # stdout과 stderr가 모두 비어있으면 명령어와 exit code 출력
+        if not e.stdout and not e.stderr:
+            print(f"명령어: {' '.join(command)}")
+            print(f"Exit code: {e.returncode}")
         return False
     except FileNotFoundError:
         print_color(f"[FAIL] {description} 실패: '{command[0]}' 명령어를 찾을 수 없습니다.", Colors.RED)
@@ -171,7 +184,15 @@ def main() -> int:
     print()
 
     # 4단계: Mypy 타입 체크
-    if not run_command(["mypy", "server/"], "Mypy 타입 체크"):
+    # python -m mypy를 사용하여 현재 Python 환경의 mypy 사용
+    mypy_command = [sys.executable, "-m", "mypy", "server/", "--show-error-codes"]
+    if not run_command(mypy_command, "Mypy 타입 체크"):
+        # mypy 에러가 발생했을 때 추가 정보 출력
+        print()
+        print_color("=== Mypy 에러 디버깅 정보 ===", Colors.YELLOW)
+        print("다음 명령어를 직접 실행하여 에러를 확인하세요:")
+        print(f"  python -m mypy server/ --show-error-codes")
+        print()
         return 1
     print()
 

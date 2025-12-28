@@ -2,13 +2,13 @@
 로그 관련 API 라우터
 """
 
+from execution_logging.execution_log_models import NodeExecutionLogRequest, NodeExecutionLogResponse
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from api.response_helpers import list_response, success_response
 from api.router_wrapper import api_handler
 from db.database import db_manager
 from log import log_manager
-from models.log_models import NodeExecutionLogRequest, NodeExecutionLogResponse
 from models.response_models import ListResponse, SuccessResponse
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
@@ -42,6 +42,9 @@ async def create_node_execution_log(request: NodeExecutionLogRequest, api_reques
             result=request.result,
             error_message=request.error_message,
             error_traceback=request.error_traceback,
+            is_connected=request.is_connected,
+            connection_sequence=request.connection_sequence,
+            node_identifier=request.node_identifier,
         )
 
         # 통계 업데이트 (completed 또는 failed 상태일 때만, running은 제외)
@@ -223,11 +226,9 @@ async def check_logs_ready(
         import asyncio
         from datetime import datetime
 
-        # 최대 60초 대기 (엑셀 열기/닫기 등 시간이 걸리는 작업 고려)
-        # 엑셀 열기: Excel 애플리케이션 시작 및 워크북 열기 작업
-        # 엑셀 닫기: 워크북 저장 및 Excel 애플리케이션 종료 작업
-        max_wait_time = 60
-        check_interval = 0.5  # 0.5초마다 확인
+        # 최대 10초 대기 (재시도 포함 로그 저장 완료 대기)
+        max_wait_time = 10
+        check_interval = 0.2  # 0.2초마다 확인 (더 빠른 응답)
         start_time = datetime.now()
         check_count = 0
 
@@ -252,6 +253,15 @@ async def check_logs_ready(
                             },
                             "로그 저장이 완료되었습니다.",
                         )
+                    # expected_status가 'failed'인 경우, failed 상태 로그가 없어도 다른 최종 상태 로그가 있으면 확인
+                    if expected_status == "failed":
+                        # failed 로그가 없지만 최소한 다른 최종 상태 로그가 있으면, 실행이 진행 중이거나 완료된 것으로 간주
+                        has_any_final = any(log.get("status") in ("completed", "failed") for log in logs)
+                        if has_any_final:
+                            # 최소한 로그가 저장되었으므로, failed 로그가 나중에 저장될 수 있지만 일단 완료로 간주
+                            logger.info(
+                                f"[API] 로그 저장 확인 (failed 로그 대기 중) - execution_id: {execution_id}, 로그 개수: {len(logs)}, 확인 횟수: {check_count}"
+                            )
                 else:
                     # expected_status가 없으면 로그가 있으면 완료로 간주
                     # 단, 모든 로그가 running 상태가 아닌지 확인
@@ -266,36 +276,85 @@ async def check_logs_ready(
                         )
 
             # 아직 로그가 저장되지 않았으면 잠시 대기 후 재확인
-            # 처음 몇 번은 빠르게 확인하고, 이후에는 점진적으로 간격을 늘림
-            if check_count < 10:
-                await asyncio.sleep(check_interval)
-            else:
-                # 10번 확인 후에도 로그가 없으면 1초 간격으로 확인
-                await asyncio.sleep(1.0)
+            await asyncio.sleep(check_interval)
 
-        # 타임아웃
+        # 타임아웃 (15초 내에 로그 저장이 완료되지 않음)
         logger.warning(
-            f"[API] 로그 저장 완료 확인 타임아웃 - execution_id: {execution_id}, 최대 대기 시간: {max_wait_time}초, 확인 횟수: {check_count}"
+            f"[API] 로그 저장 완료 확인 타임아웃 (15초) - execution_id: {execution_id}, 확인 횟수: {check_count}, expected_status: {expected_status}"
         )
-        # 타임아웃이 발생했지만 로그가 있는 경우라도 반환 (부분적으로라도 로그가 저장되었을 수 있음)
+        # 타임아웃 발생 시 최종 확인: 로그가 있으면 저장된 것으로 간주, 없으면 저장 실패
         final_logs = db_manager.node_execution_logs.get_logs_by_execution_id(execution_id)
         if final_logs and len(final_logs) > 0:
-            logger.info(
-                f"[API] 타임아웃 발생했지만 로그가 존재함 - execution_id: {execution_id}, 로그 개수: {len(final_logs)}"
+            # expected_status가 지정된 경우 해당 상태의 로그 확인
+            if expected_status:
+                has_expected_status = any(log.get("status") == expected_status for log in final_logs)
+                if has_expected_status:
+                    logger.info(
+                        f"[API] 로그 저장 완료 (타임아웃 내) - execution_id: {execution_id}, 상태: {expected_status}, 로그 개수: {len(final_logs)}"
+                    )
+                    return success_response(
+                        {
+                            "execution_id": execution_id,
+                            "ready": True,
+                            "logs_count": len(final_logs),
+                            "status": expected_status,
+                            "timeout": True,
+                        },
+                        "로그 저장이 완료되었습니다.",
+                    )
+                # expected_status가 'failed'인 경우, failed 로그가 없어도 다른 최종 상태 로그가 있으면 확인
+                if expected_status == "failed":
+                    # failed 로그가 없지만 최소한 다른 로그가 저장되었으므로, 로그 저장이 진행 중이거나 완료된 것으로 간주
+                    has_any_final = any(log.get("status") in ("completed", "failed") for log in final_logs)
+                    if has_any_final:
+                        logger.info(
+                            f"[API] 로그 저장 확인 (failed 로그 대기 중, 타임아웃) - execution_id: {execution_id}, 로그 개수: {len(final_logs)}"
+                        )
+                        return success_response(
+                            {
+                                "execution_id": execution_id,
+                                "ready": True,
+                                "logs_count": len(final_logs),
+                                "status": "failed",
+                                "timeout": True,
+                                "note": "failed 로그가 아직 저장되지 않았을 수 있지만, 다른 로그가 저장되어 실행이 진행되었음을 확인",
+                            },
+                            "로그 저장이 완료되었습니다.",
+                        )
+            else:
+                # expected_status가 없으면 최종 상태 로그 확인
+                has_final_status = any(log.get("status") in ("completed", "failed") for log in final_logs)
+                if has_final_status:
+                    logger.info(
+                        f"[API] 로그 저장 완료 (타임아웃 내) - execution_id: {execution_id}, 로그 개수: {len(final_logs)}"
+                    )
+                    return success_response(
+                        {
+                            "execution_id": execution_id,
+                            "ready": True,
+                            "logs_count": len(final_logs),
+                            "timeout": True,
+                        },
+                        "로그 저장이 완료되었습니다.",
+                    )
+            # 로그는 있지만 expected_status와 일치하지 않거나 최종 상태가 없는 경우
+            logger.warning(
+                f"[API] 로그 저장 실패 (예상 상태 불일치) - execution_id: {execution_id}, 로그 개수: {len(final_logs)}, expected_status: {expected_status}"
             )
             return success_response(
                 {
                     "execution_id": execution_id,
-                    "ready": True,
+                    "ready": False,
                     "logs_count": len(final_logs),
                     "timeout": True,
-                    "partial": True,
                 },
-                "로그 저장 확인 타임아웃 (60초) - 일부 로그만 저장되었을 수 있습니다.",
+                "로그 저장이 완료되지 않았습니다. (예상 상태와 일치하지 않음)",
             )
+        # 로그가 전혀 없는 경우
+        logger.warning(f"[API] 로그 저장 실패 (로그 없음) - execution_id: {execution_id}")
         return success_response(
             {"execution_id": execution_id, "ready": False, "timeout": True},
-            "로그 저장 확인 타임아웃 (60초)",
+            "로그 저장이 완료되지 않았습니다. (로그가 저장되지 않음)",
         )
     except Exception as e:
         logger.error(f"[API] 로그 저장 완료 확인 실패: {e!s}")

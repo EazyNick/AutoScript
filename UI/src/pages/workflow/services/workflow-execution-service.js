@@ -8,6 +8,7 @@ import { getNodeRegistry } from './node-registry.js';
 import { getDashboardManagerInstance } from '../dashboard.js';
 import { captureAndSaveScreenshot } from '../../../js/api/screenshot-api.js';
 import { t } from '../../../js/utils/i18n.js';
+import { getLogNodeIdentifier, getSimpleNodeIdentifier } from '../utils/node-identifier.js';
 
 export class WorkflowExecutionService {
     constructor(workflowPage) {
@@ -68,6 +69,25 @@ export class WorkflowExecutionService {
             if (toastManager) {
                 toastManager.warning('실행할 노드가 없습니다. 시작 노드에서 연결된 노드가 있는지 확인하세요.');
             }
+            return;
+        }
+
+        // 엑셀 관련 노드 검증: 엑셀 열기 노드가 필요한 노드들이 이전 노드 체인에 excel-open이 있는지 확인
+        const excelValidationError = await this.validateExcelNodes(workflowData.nodes);
+        if (excelValidationError) {
+            // 검증 실패 시 에러 메시지 표시하고 실행 중단
+            if (toastManager) {
+                toastManager.error(excelValidationError.message);
+            }
+            // 노드에 에러 표시
+            if (excelValidationError.nodeId) {
+                const errorNode = document.getElementById(excelValidationError.nodeId);
+                if (errorNode) {
+                    this.showNodeError(errorNode);
+                }
+            }
+            // 실행 중단
+            this.isExecuting = false;
             return;
         }
 
@@ -152,9 +172,15 @@ export class WorkflowExecutionService {
         // currentNodeIndex: 현재 실행 중인 노드 인덱스 추적 (진행률 표시용)
         let currentNodeIndex = -1;
 
-        // Start 노드는 항상 성공으로 카운팅 (실행은 하지만 성공으로 간주)
-        // 시작 노드가 실행 목록에 포함되어 있으면 카운팅
-        if (workflowData.nodes.some((node) => node.id === 'start' || node.type === 'start')) {
+        // 경계 노드는 항상 성공으로 카운팅 (실행은 하지만 성공으로 간주)
+        // 경계 노드가 실행 목록에 포함되어 있으면 카운팅
+        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+        if (
+            workflowData.nodes.some((node) => {
+                const nodeType = node.type || (node.id === 'start' ? 'start' : null);
+                return nodeType && isBoundaryNodeSync(nodeType);
+            })
+        ) {
             successCount = 1;
         }
 
@@ -220,7 +246,8 @@ export class WorkflowExecutionService {
                     document.getElementById(nodeData.id) || document.querySelector(`[data-node-id="${nodeData.id}"]`);
 
                 if (!nodeElement) {
-                    console.warn(`노드 요소를 찾을 수 없습니다: ${nodeData.id}`);
+                    const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                    console.warn(`[WorkflowExecutionService] 노드 요소를 찾을 수 없습니다: ${nodeIdentifier}`);
                     continue;
                 }
 
@@ -306,12 +333,16 @@ export class WorkflowExecutionService {
                         // condition 노드인 경우 결과에 따라 다음 노드 동적으로 선택
                         if (
                             nodeData.type === 'condition' &&
+                            nodeResult &&
                             nodeResult.output &&
                             typeof nodeResult.output.result === 'boolean'
                         ) {
                             const conditionResult = nodeResult.output.result;
                             const logger = this.workflowPage.getLogger();
-                            logger.log(`[WorkflowExecutionService] Condition 노드 결과: ${conditionResult}`);
+                            const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                            logger.log(
+                                `[WorkflowExecutionService] Condition 노드 결과: ${nodeIdentifier} → ${conditionResult ? 'TRUE' : 'FALSE'}`
+                            );
 
                             // condition 노드의 연결 정보 가져오기
                             const connectionManager = nodeManager?.connectionManager;
@@ -353,7 +384,10 @@ export class WorkflowExecutionService {
                         ) {
                             const repeatCount = nodeResult.output.repeat_count;
                             const logger = this.workflowPage.getLogger();
-                            logger.log(`[WorkflowExecutionService] Repeat 노드 실행 - 반복 횟수: ${repeatCount}`);
+                            const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                            logger.log(
+                                `[WorkflowExecutionService] Repeat 노드 실행: ${nodeIdentifier} - 반복 횟수: ${repeatCount}`
+                            );
 
                             // 반복 노드의 연결 정보 가져오기
                             const connectionManager = nodeManager?.connectionManager;
@@ -798,6 +832,7 @@ export class WorkflowExecutionService {
                         }
 
                         // 이전 노드 결과 업데이트 (다음 노드 실행 시 전달)
+                        // nodeResult는 이미 outdata/indata 구조이므로 그대로 사용
                         previousNodeResult = {
                             ...nodeResult,
                             node_id: nodeData.id,
@@ -819,17 +854,36 @@ export class WorkflowExecutionService {
                         const nodeTitle = nodeData.data?.title || nodeData.type || nodeData.id;
                         let errorMessage = '알 수 없는 오류';
 
+                        // 에러 메시지 추출 헬퍼 함수
+                        const extractErrorMessage = (errorObj) => {
+                            if (!errorObj) {
+                                return null;
+                            }
+                            // 문자열이면 그대로 반환
+                            if (typeof errorObj === 'string') {
+                                return errorObj;
+                            }
+                            // 객체인 경우 message, reason, detail 등을 우선순위로 추출
+                            if (typeof errorObj === 'object') {
+                                return (
+                                    errorObj.message || errorObj.reason || errorObj.detail || JSON.stringify(errorObj)
+                                );
+                            }
+                            // 그 외의 경우 문자열로 변환
+                            return String(errorObj);
+                        };
+
                         // 에러 메시지 추출 (우선순위: nodeResult.error > nodeResult.output.error > nodeResult.message > result.message)
                         if (nodeResult?.error) {
-                            errorMessage = nodeResult.error;
+                            errorMessage = extractErrorMessage(nodeResult.error) || '알 수 없는 오류';
                         } else if (nodeResult?.output?.error) {
-                            errorMessage = nodeResult.output.error;
+                            errorMessage = extractErrorMessage(nodeResult.output.error) || '알 수 없는 오류';
                         } else if (nodeResult?.message) {
-                            errorMessage = nodeResult.message;
+                            errorMessage = extractErrorMessage(nodeResult.message) || '알 수 없는 오류';
                         } else if (result.message) {
-                            errorMessage = result.message;
+                            errorMessage = extractErrorMessage(result.message) || '알 수 없는 오류';
                         } else if (result.detail) {
-                            errorMessage = result.detail;
+                            errorMessage = extractErrorMessage(result.detail) || '알 수 없는 오류';
                         }
 
                         // 에러 발생 시 실행 중단 (에러를 throw하여 상위로 전파)
@@ -852,7 +906,8 @@ export class WorkflowExecutionService {
                     // 네트워크 에러 또는 서버 에러 등
                     // 노드 실행 실패는 여기서 한 번만 카운팅
                     const logger = this.workflowPage.getLogger();
-                    logger.error(`[WorkflowExecutionService] 노드 실행 오류 (${nodeData.id}):`, error);
+                    const nodeIdentifier = getSimpleNodeIdentifier(nodeData, i + 1, totalNodesCount);
+                    logger.error(`[WorkflowExecutionService] 노드 실행 오류: ${nodeIdentifier}`, error);
                     this.showNodeError(nodeElement);
 
                     // 에러 발생 시에도 스크린샷 캡처 (에러 상황 기록용)
@@ -1137,8 +1192,19 @@ export class WorkflowExecutionService {
         const connections =
             nodeManager && nodeManager.connectionManager ? nodeManager.connectionManager.getConnections() : [];
 
-        // 시작 노드가 있고 연결이 있으면 연결 순서대로 정렬
-        if (byId.has('start') && connections && connections.length > 0) {
+        // 경계 노드가 있고 연결이 있으면 연결 순서대로 정렬
+        // 경계 노드 찾기 (시작 노드 등)
+        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+        let boundaryNodeId = null;
+        for (const [nodeId, nodeElement] of byId.entries()) {
+            const nodeType = this.workflowPage.getNodeType(nodeElement);
+            if (isBoundaryNodeSync(nodeType)) {
+                boundaryNodeId = nodeId;
+                break;
+            }
+        }
+
+        if (boundaryNodeId && connections && connections.length > 0) {
             // 연결 맵 생성: from -> [to1, to2, ...] (여러 분기 지원)
             const nextMap = new Map(); // Map<from, Array<{to, outputType}>>
 
@@ -1152,16 +1218,16 @@ export class WorkflowExecutionService {
                 });
             });
 
-            // 시작 노드부터 순차적으로 탐색
+            // 경계 노드부터 순차적으로 탐색
             const visited = new Set();
             const addedToOrdered = new Set(); // ordered에 추가된 노드 ID 추적 (중복 방지)
-            const queue = ['start']; // BFS를 위한 큐
+            const queue = [boundaryNodeId]; // BFS를 위한 큐
 
-            // 시작 노드를 ordered에 먼저 추가
-            if (byId.has('start')) {
-                const startElement = byId.get('start');
-                ordered.push(startElement);
-                addedToOrdered.add('start');
+            // 경계 노드를 ordered에 먼저 추가
+            if (byId.has(boundaryNodeId)) {
+                const boundaryElement = byId.get(boundaryNodeId);
+                ordered.push(boundaryElement);
+                addedToOrdered.add(boundaryNodeId);
             }
 
             while (queue.length > 0) {
@@ -1248,6 +1314,36 @@ export class WorkflowExecutionService {
         const registry = getNodeRegistry();
         const allConfigs = await registry.getNodeConfigs();
 
+        // 연결 정보 계산: 각 노드의 연결 상태와 순서 계산
+        const connectionInfoMap = new Map();
+        const nodeIdToIndex = new Map();
+
+        // 경계 노드부터 시작하여 연결 순서 계산 (0부터 시작)
+        executableNodes.forEach((node, index) => {
+            const nodeId = node.id || node.dataset.nodeId;
+            nodeIdToIndex.set(nodeId, index);
+
+            // 연결 여부 확인: 이전 노드로부터 연결이 있는지 확인
+            const hasInputConnection = connections.some((conn) => conn.to === nodeId);
+            const isBoundary = index === 0; // 첫 번째 노드는 경계 노드
+
+            // 노드 식별자 생성
+            const nodeType = this.workflowPage.getNodeType(node);
+            const nodeData = this.workflowPage.getNodeData(node);
+            const nodeName = nodeData?.title || nodeData?.name || null;
+            const nodeIdentifier = getSimpleNodeIdentifier(
+                { id: nodeId, type: nodeType, title: nodeName },
+                index,
+                executableNodes.length
+            );
+
+            connectionInfoMap.set(nodeId, {
+                is_connected: hasInputConnection || isBoundary, // 경계 노드는 연결된 것으로 간주
+                connection_sequence: index, // 0부터 시작
+                node_identifier: nodeIdentifier
+            });
+        });
+
         // 각 노드에 대해 parameters 추출 (workflow-save-service.js와 동일한 로직)
         const nodesWithParameters = await Promise.all(
             executableNodes.map(async (node) => {
@@ -1257,12 +1353,20 @@ export class WorkflowExecutionService {
 
                 // parameters 추출
                 const parameters = {};
+                // nodeManager.nodeData에서 실제 노드 데이터 가져오기 (메모리상의 최신 데이터)
+                const managerNodeData =
+                    nodeManager && nodeManager.nodeData && nodeManager.nodeData[nodeId]
+                        ? nodeManager.nodeData[nodeId]
+                        : null;
+                // nodeData는 DOM에서 가져온 데이터, managerNodeData는 메모리상의 데이터 (우선순위 높음)
+                const actualNodeData = managerNodeData || nodeData || {};
+
                 if (nodeManager && nodeManager.nodeData && nodeManager.nodeData[nodeId]) {
                     const config = allConfigs[nodeType];
 
                     if (config) {
                         // 상세 노드 타입이 있으면 상세 노드 타입의 파라미터 우선 사용
-                        const detailNodeType = nodeData?.action_node_type;
+                        const detailNodeType = actualNodeData?.action_node_type;
                         let parametersToExtract = null;
 
                         if (detailNodeType && config.detailTypes?.[detailNodeType]?.parameters) {
@@ -1271,16 +1375,20 @@ export class WorkflowExecutionService {
                             parametersToExtract = config.parameters;
                         }
 
-                        // 파라미터 정의에 따라 nodeData에서 값 추출
+                        // 파라미터 정의에 따라 actualNodeData에서 값 추출
                         if (parametersToExtract) {
                             // 각 파라미터 정의를 순회하며 값 추출
                             for (const [paramKey, paramConfig] of Object.entries(parametersToExtract)) {
                                 // boolean 타입은 false도 유효한 값이므로 별도 처리
                                 if (paramConfig.type === 'boolean') {
                                     // boolean은 undefined, null이 아닌 경우 모두 저장 (false도 유효)
-                                    if (nodeData && nodeData[paramKey] !== undefined && nodeData[paramKey] !== null) {
-                                        // nodeData에 값이 있으면 Boolean으로 변환하여 저장
-                                        parameters[paramKey] = Boolean(nodeData[paramKey]);
+                                    if (
+                                        actualNodeData &&
+                                        actualNodeData[paramKey] !== undefined &&
+                                        actualNodeData[paramKey] !== null
+                                    ) {
+                                        // actualNodeData에 값이 있으면 Boolean으로 변환하여 저장
+                                        parameters[paramKey] = Boolean(actualNodeData[paramKey]);
                                     } else if (paramConfig.default !== undefined) {
                                         // 값이 없고 기본값이 있으면 기본값을 Boolean으로 변환하여 저장
                                         parameters[paramKey] = Boolean(paramConfig.default);
@@ -1289,13 +1397,13 @@ export class WorkflowExecutionService {
                                     // boolean이 아닌 다른 타입은 기존 로직 사용
                                     // 값이 존재하고 빈 문자열이 아닌 경우에만 저장
                                     if (
-                                        nodeData &&
-                                        nodeData[paramKey] !== undefined &&
-                                        nodeData[paramKey] !== null &&
-                                        nodeData[paramKey] !== ''
+                                        actualNodeData &&
+                                        actualNodeData[paramKey] !== undefined &&
+                                        actualNodeData[paramKey] !== null &&
+                                        actualNodeData[paramKey] !== ''
                                     ) {
-                                        // nodeData의 값을 그대로 저장
-                                        parameters[paramKey] = nodeData[paramKey];
+                                        // actualNodeData의 값을 그대로 저장
+                                        parameters[paramKey] = actualNodeData[paramKey];
                                     }
                                     // 값이 없고 기본값이 있으면 기본값 사용
                                     else if (paramConfig.default !== undefined && paramConfig.default !== null) {
@@ -1338,11 +1446,22 @@ export class WorkflowExecutionService {
                     }
                 }
 
+                // 연결 정보 가져오기
+                const connectionInfo = connectionInfoMap.get(nodeId) || {
+                    is_connected: false,
+                    connection_sequence: null,
+                    node_identifier: null
+                };
+
                 return {
                     id: nodeId,
                     type: nodeType,
                     data: nodeData || {},
-                    parameters: parameters
+                    parameters: parameters,
+                    // 연결 정보 추가
+                    is_connected: connectionInfo.is_connected,
+                    connection_sequence: connectionInfo.connection_sequence,
+                    node_identifier: connectionInfo.node_identifier
                 };
             })
         );
@@ -1366,6 +1485,110 @@ export class WorkflowExecutionService {
                 }, 500);
             }, index * 300);
         });
+    }
+
+    /**
+     * 엑셀 관련 노드 검증: 엑셀 열기 노드가 필요한 노드들이 이전 노드 체인에 excel-open이 있는지 확인
+     * @param {Array} nodes - 실행할 노드 목록
+     * @returns {Promise<Object|null>} 검증 실패 시 에러 정보, 성공 시 null
+     */
+    async validateExcelNodes(nodes) {
+        // 노드 레지스트리에서 엑셀 관련 노드 목록 동적으로 가져오기
+        const { getNodeRegistry } = await import('../services/node-registry.js');
+        const registry = getNodeRegistry();
+        const allConfigs = await registry.getAllConfigs();
+
+        // excel-로 시작하는 노드 타입들을 찾되, excel-open은 제외
+        const excelNodesRequiringOpen = Object.keys(allConfigs).filter(
+            (nodeType) => nodeType.startsWith('excel-') && nodeType !== 'excel-open'
+        );
+
+        const nodeManager = this.workflowPage.getNodeManager();
+        if (!nodeManager || !nodeManager.connectionManager) {
+            return null; // 연결 정보가 없으면 검증 불가 (무시)
+        }
+
+        const connections = nodeManager.connectionManager.getConnections();
+        if (!connections || connections.length === 0) {
+            return null; // 연결이 없으면 검증 불가 (무시)
+        }
+
+        // 각 노드를 순회하며 엑셀 관련 노드인지 확인
+        for (const node of nodes) {
+            const nodeType = node.type;
+            const nodeId = node.id;
+            const nodeName = node.data?.title || nodeType || nodeId;
+
+            // 엑셀 관련 노드가 아니면 건너뛰기
+            if (!excelNodesRequiringOpen.includes(nodeType)) {
+                continue;
+            }
+
+            // 이전 노드 체인 가져오기
+            const previousNodes = await this.getPreviousNodeChainForValidation(nodeId, connections);
+
+            // 이전 노드 체인에 excel-open이 있는지 확인
+            const hasExcelOpen = previousNodes.some((prevNode) => prevNode.type === 'excel-open');
+
+            if (!hasExcelOpen) {
+                // 검증 실패: 엑셀 열기 노드가 없음
+                const nodeLabel = nodeName || nodeType;
+                return {
+                    nodeId: nodeId,
+                    nodeName: nodeLabel,
+                    message: `'${nodeLabel}' 노드를 실행하려면 이전 노드 체인에 '엑셀 열기' 노드가 필요합니다. 엑셀 열기 노드를 추가하거나 이 노드 앞에 연결해주세요.`
+                };
+            }
+        }
+
+        return null; // 검증 통과
+    }
+
+    /**
+     * 이전 노드 체인 가져오기 (워크플로우 실행 검증용)
+     * @param {string} nodeId - 현재 노드 ID
+     * @param {Array} connections - 연결 정보 목록
+     * @returns {Promise<Array>} 이전 노드 체인
+     */
+    async getPreviousNodeChainForValidation(nodeId, connections) {
+        const nodeChain = [];
+        let currentNodeId = nodeId;
+
+        while (currentNodeId) {
+            // 현재 노드로 들어오는 연결 찾기
+            const inputConnection = connections.find((conn) => conn.to === currentNodeId);
+            if (!inputConnection) {
+                break;
+            }
+
+            const previousNodeId = inputConnection.from;
+            if (previousNodeId === currentNodeId) {
+                break;
+            }
+
+            const previousNodeElement = document.getElementById(previousNodeId);
+            if (!previousNodeElement) {
+                break;
+            }
+
+            const nodeType = this.workflowPage.getNodeType(previousNodeElement);
+
+            // 이전 노드 정보 추가
+            nodeChain.unshift({
+                id: previousNodeId,
+                type: nodeType
+            });
+
+            // 경계 노드에 도달하면 종료
+            const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+            if (nodeType && isBoundaryNodeSync(nodeType)) {
+                break;
+            }
+
+            currentNodeId = previousNodeId;
+        }
+
+        return nodeChain;
     }
 
     /**

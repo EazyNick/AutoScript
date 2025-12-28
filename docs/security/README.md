@@ -38,13 +38,13 @@ allow_origins=[
 - 역할 기반 접근 제어 (RBAC) 구현
 
 #### 3. HTTP API 요청 노드의 URL 검증 부족
-**위치**: `server/nodes/actionnodes/http_api_request.py`
+**참고**: 현재 HTTP API 요청 노드는 구현되지 않았습니다. 향후 구현 시 다음 사항을 고려해야 합니다.
 
-**문제점**:
+**예상 문제점**:
 - SSRF (Server-Side Request Forgery) 공격 가능
 - 내부 네트워크에 접근 가능 (예: `http://localhost`, `http://127.0.0.1`)
 
-**개선 방안**:
+**개선 방안** (향후 구현 시):
 ```python
 # 허용된 도메인 화이트리스트
 ALLOWED_DOMAINS = ["api.example.com", "external-api.com"]

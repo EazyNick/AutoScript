@@ -23,6 +23,10 @@ class NodeExecutionLogRequest(BaseModel):
     result: dict[str, Any] | None = Field(None, description="실행 결과")
     error_message: str | None = Field(None, description="에러 메시지 (실패 시)")
     error_traceback: str | None = Field(None, description="에러 스택 트레이스 (실패 시)")
+    # 연결 정보 필드
+    is_connected: bool | None = Field(None, description="다른 노드와 연결되어 있는지 여부")
+    connection_sequence: int | None = Field(None, description="시작 노드(0번째)를 기준으로 한 연결 순서")
+    node_identifier: str | None = Field(None, description="노드 식별자 (이름, 타입, 순서 등을 포함한 읽기 쉬운 형식)")
 
 
 class NodeExecutionLogResponse(BaseModel):

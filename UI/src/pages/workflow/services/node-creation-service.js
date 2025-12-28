@@ -73,7 +73,7 @@ export class NodeCreationService {
     /**
      * 기본 경계 노드 생성
      */
-    createDefaultBoundaryNodes() {
+    async createDefaultBoundaryNodes() {
         const nodeManager = this.workflowPage.getNodeManager();
         if (!nodeManager) {
             console.error('NodeManager를 찾을 수 없습니다.');
@@ -86,22 +86,21 @@ export class NodeCreationService {
         // nodeData: 노드 데이터 딕셔너리 (노드 타입 확인용)
         const nodeData = nodeManager.nodeData || {};
 
-        // hasStartNode: 시작 노드가 이미 존재하는지 여부
-        // 여러 방법으로 시작 노드 확인 (id, type, 제목)
-        const hasStartNode = nodeElements.some((nodeElement) => {
+        // hasBoundaryNode: 경계 노드가 이미 존재하는지 여부
+        // 여러 방법으로 경계 노드 확인
+        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+        const hasBoundaryNode = nodeElements.some((nodeElement) => {
             // nodeId: 노드 ID (id 속성 또는 dataset.nodeId에서 가져옴)
             const nodeId = nodeElement.id || nodeElement.dataset?.nodeId;
-            // 시작 노드 확인 (id가 'start'이거나, 타입이 'start'이거나, 제목에 '시작'이 포함된 경우)
-            return (
-                nodeId === 'start' ||
-                nodeData[nodeId]?.type === 'start' ||
-                nodeElement.querySelector('.node-title')?.textContent?.includes('시작')
-            );
+            // 노드 타입 가져오기
+            const nodeType = nodeData[nodeId]?.type || this.workflowPage.getNodeType(nodeElement);
+            // 경계 노드 확인
+            return nodeType && isBoundaryNodeSync(nodeType);
         });
 
         const logger = this.workflowPage.getLogger();
         const log = logger.log;
-        log(`[NodeCreationService] 기본 시작 노드 생성 시도 - start 존재: ${hasStartNode}`);
+        log(`[NodeCreationService] 기본 경계 노드 생성 시도 - 경계 노드 존재: ${hasBoundaryNode}`);
 
         // baseX, baseY: 기본 노드 위치 (좌표)
         const baseX = 0;
@@ -110,30 +109,46 @@ export class NodeCreationService {
         // boundaryNodes: 생성할 경계 노드 목록 (start/end 노드)
         const boundaryNodes = [];
 
-        // start 노드가 없을 때만 추가
-        // hasStartNode가 false이면 시작 노드 생성
-        if (!hasStartNode) {
-            boundaryNodes.push({
-                id: 'start',
-                type: 'start',
-                title: '시작',
-                x: baseX - 200, // 시작 노드는 왼쪽에 배치
-                y: baseY
+        // 경계 노드가 없을 때만 추가
+        // hasBoundaryNode가 false이면 경계 노드 생성
+        if (!hasBoundaryNode) {
+            // 모든 경계 노드 타입 가져오기
+            const registry = await import('../services/node-registry.js').then((m) => m.getNodeRegistry());
+            const allConfigs = await registry.getAllConfigs();
+
+            // 경계 노드 타입 찾기 (시작 노드 우선)
+            const boundaryNodeTypes = Object.keys(allConfigs).filter((type) => {
+                const config = allConfigs[type];
+                return config?.isBoundary === true;
             });
+
+            // 시작 노드 타입 찾기 (일반적으로 'start')
+            const startNodeType = boundaryNodeTypes.find((type) => type === 'start') || boundaryNodeTypes[0];
+
+            if (startNodeType) {
+                const startConfig = allConfigs[startNodeType];
+                boundaryNodes.push({
+                    id: startNodeType === 'start' ? 'start' : `${startNodeType}_${Date.now()}`,
+                    type: startNodeType,
+                    title: startConfig?.title || startConfig?.label || '시작',
+                    x: baseX - 200, // 시작 노드는 왼쪽에 배치
+                    y: baseY
+                });
+            }
         }
 
         // boundaryNodes가 비어있으면 생성할 노드가 없으므로 종료
         if (boundaryNodes.length === 0) {
-            log('[NodeCreationService] 이미 시작 노드가 존재하여 기본 시작 노드를 생성하지 않습니다.');
+            log('[NodeCreationService] 이미 경계 노드가 존재하여 기본 경계 노드를 생성하지 않습니다.');
             return;
         }
 
-        log(`[NodeCreationService] ${boundaryNodes.length}개의 시작 노드 생성 중...`);
+        log(`[NodeCreationService] ${boundaryNodes.length}개의 경계 노드 생성 중...`);
 
         boundaryNodes.forEach((nodeData) => {
             try {
                 nodeManager.createNode(nodeData);
-                log(`[NodeCreationService] 시작 노드 생성 완료: ${nodeData.id}`);
+                log(`[NodeCreationService] 경계 노드 생성 완료: ${nodeData.id}`);
             } catch (error) {
                 console.error('노드 생성 실패:', error);
             }

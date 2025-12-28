@@ -93,12 +93,16 @@ def prepare_condition_node_data(
   "status": "completed",
   "output": {
     "wait_time": 1.0
-  }
+  },
+  "_execution_id": "20250101-120000-abc123",
+  "_script_id": 1,
+  "_node_id": "node1",
+  "_node_name": "대기 노드"
 }
 ```
 
 **조건 노드 실행 시:**
-- 클라이언트에서 이전 노드 결과를 `previous_node_result`에 포함하여 전달
+- 클라이언트에서 이전 노드 결과를 `previous_node_result`에 포함하여 전달 (기존 형식: {action, status, output})
 - 서버에서 컨텍스트에 추가
 - 조건 노드 실행 전 `previous_output`에 주입:
   ```python
@@ -107,10 +111,46 @@ def prepare_condition_node_data(
       "wait_time": 1.0
     },
     "condition_type": "equals",
-    "field_path": "output.wait_time",
+    "field_path": "outdata.output.wait_time",  # v0.0.6: 경로 형식 변경 (경로 해석용)
     "compare_value": "1.0"
   }
   ```
+
+## 이전 노드 출력 경로 형식 (v0.0.6)
+
+### 경로 형식 변경
+
+**이전 (v0.0.5 이하):**
+- `output.data.execution_id`
+- `output.execution_id`
+
+**현재 (v0.0.6 이후):**
+- `outdata.output.execution_id` ✅ - 이전 노드의 출력 데이터 접근
+- `outdata.action` - 이전 노드의 action 값
+- `outdata.status` - 이전 노드의 status 값
+- `indata.parameter_name` - 이전 노드의 입력 파라미터 접근 (향후 지원)
+
+**중요:** 노드 실행 결과는 기존 형식 `{action, status, output}`을 그대로 유지합니다. 다음 노드에서 참조할 때만 `outdata.`/`indata.` 경로를 사용합니다.
+
+### 자동 경로 해석
+
+`server/utils/field_path_resolver.py`가 모든 노드의 파라미터에서 경로 문자열을 자동으로 해석합니다:
+
+1. 파라미터 값이 `outdata.` 또는 `indata.`로 시작하는지 확인
+2. 이전 노드 결과를 `{outdata: {action, status, output}, indata: {...}}` 구조로 래핑 (경로 해석용)
+3. 경로를 따라 실제 값 추출
+4. 파라미터 값을 실제 값으로 교체
+
+**예시:**
+```python
+# 파라미터 값이 "outdata.output.execution_id"인 경우
+# → 이전 노드 결과에서 실제 값으로 자동 변환
+execution_id = "outdata.output.execution_id"  # 경로 문자열
+# ↓ 자동 해석
+execution_id = "20250101-120000-abc123"  # 실제 값
+```
+
+이렇게 하면 엑셀 노드뿐만 아니라 모든 노드에서 이전 노드 출력을 자동으로 사용할 수 있습니다.
 
 ## 노드 실행 로그
 

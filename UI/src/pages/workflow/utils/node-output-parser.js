@@ -133,7 +133,7 @@ export function getNodeResult(nodeData) {
     }
 
     // 우선순위: 1) result 필드, 2) output 필드 (하위 호환성)
-    if (nodeData.result && nodeData.result.output) {
+    if (nodeData.result) {
         // 표준 형식
         return nodeData.result;
     } else if (nodeData.output) {

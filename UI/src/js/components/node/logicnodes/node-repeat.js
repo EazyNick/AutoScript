@@ -7,7 +7,7 @@
     let t = null;
     (async () => {
         try {
-            const i18nModule = await import('../../utils/i18n.js');
+            const i18nModule = await import('../../../utils/i18n.js');
             if (i18nModule && typeof i18nModule.t === 'function') {
                 t = i18nModule.t;
             }

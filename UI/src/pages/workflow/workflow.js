@@ -320,9 +320,9 @@ export class WorkflowPage {
     /**
      * 기본 시작/종료 노드 생성
      */
-    createDefaultBoundaryNodes() {
+    async createDefaultBoundaryNodes() {
         if (this.creationService) {
-            this.creationService.createDefaultBoundaryNodes();
+            await this.creationService.createDefaultBoundaryNodes();
         }
     }
 

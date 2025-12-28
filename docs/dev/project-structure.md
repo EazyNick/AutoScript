@@ -1,20 +1,43 @@
-**최신 수정일자: 2025.12.00**
+**최신 수정일자: 2025.12.28**
 
 # 프로젝트 구조
+
+## 프로젝트 루트 구조
+
+```
+AutoScript/
+├── .env                    # 환경 변수 설정 파일 (선택사항)
+├── .gitignore             # Git 제외 파일 목록
+├── start-server.bat       # 서버 실행 배치 파일
+├── scripts/               # 유틸리티 스크립트
+├── server/                # 백엔드 서버 코드
+├── UI/                    # 프론트엔드 UI 코드
+├── docs/                  # 문서
+└── ...
+```
+
+> **참고**: `.env` 파일은 프로젝트 루트에 생성하며, 서버 설정(호스트, 포트 등)을 관리합니다. 자세한 내용은 [환경 변수 설정 가이드](environment.md)를 참고하세요.
 
 ## 주요 디렉토리
 
 ### `server/`
 - **api/**: REST API 라우터 (`@api_handler` 데코레이터 사용)
 - **nodes/**: 노드 클래스 (`BaseNode` 상속, `@NodeExecutor` 데코레이터)
-  - `actionnodes/`: 액션 노드들
+  - `boundarynodes/`: 경계 노드들 (시작 노드 등)
   - `conditionnodes/`: 조건 노드들
-  - `waitnodes/`: 대기 노드들
+  - `excelnodes/`: 엑셀 노드들
   - `imagenodes/`: 이미지 노드들
-  - `boundarynodes/`: 시작/종료 노드들
+  - `logicnodes/`: 로직 노드들 (반복 노드 등)
+  - `processnodes/`: 프로세스 노드들 (프로세스 포커스 등)
+  - `waitnodes/`: 대기 노드들
 - **services/**: 비즈니스 로직
 - **automation/**: 화면 캡처, 입력 처리, 워크플로우 실행
 - **db/**: SQLite 데이터베이스 관리
+- **execution_logging/**: 노드 실행 로그 관련 모듈 통합
+  - `execution_log_client.py`: 로그 전송 클라이언트
+  - `execution_log_models.py`: 로그 모델
+  - `execution_log_repository.py`: 로그 DB 리포지토리
+- **log/**: 애플리케이션 로그 관리 (`log_manager.py`)
 - **utils/**: 공통 유틸리티 (파라미터 검증, 결과 포맷팅 등)
 - **config/**: 설정 관리 (`server_config.py`)
 

@@ -448,21 +448,23 @@ lint-all.bat
 
 1. **가상환경 확인**
    ```bash
-   # 가상환경이 있는지 확인
-   ls -la .venv  # 또는 venv, env
+   # 가상환경이 있는지 확인 (반드시 'venv' 이름 사용)
+   ls -la venv  # Windows: dir venv
    ```
 
 2. **가상환경 활성화 후 수동 실행**
    ```bash
    # Windows
-   .venv\Scripts\activate
+   venv\Scripts\activate
    
    # Linux/Mac
-   source .venv/bin/activate
+   source venv/bin/activate
    
    # 그 후 스크립트 실행
    python scripts/linting/lint.py
    ```
+
+> **중요**: 가상환경 이름은 반드시 `venv`로 생성해야 합니다. 다른 이름을 사용하면 자동 스크립트가 가상환경을 찾지 못할 수 있습니다.
 
 3. **ruff와 mypy 설치 확인**
    ```bash

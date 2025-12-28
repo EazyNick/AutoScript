@@ -147,43 +147,119 @@ export function generateParameterInput(paramKey, paramConfig, prefix = 'node-', 
 
                         // 필드 경로 파라미터면 자동완성 입력 필드 생성
                         if (isFieldPath) {
-                            // 커스텀 자동완성 입력 필드 (회색 미리보기 포함)
+                            // 드롭다운 + 입력 하이브리드 지원 여부 확인
+                            const useDropdownInput =
+                                paramConfig.ui_type === 'dropdown_input' ||
+                                paramConfig.options_source === 'previous_output';
+
                             // datalistId: datalist 요소 ID (자동완성 옵션 목록)
                             const datalistId = `${fieldId}-datalist`;
                             // autocompleteId: 자동완성 미리보기 요소 ID (회색 미리보기 표시용)
                             const autocompleteId = `${fieldId}-autocomplete`;
-                            inputHtml = `
-                                <div style="position: relative; display: flex; gap: 8px; align-items: center;">
-                                    <div style="position: relative; flex: 1;">
-                                        <input 
-                                            type="text" 
-                                            id="${fieldId}" 
-                                            list="${datalistId}"
-                                            value="${escapeHtml(value)}" 
-                                            ${requiredAttr}
-                                            placeholder="${escapeHtml(placeholder)}"
-                                            class="node-settings-input node-field-path-input"
-                                            style="width: 100%; padding: 8px; padding-right: 8px; position: relative; z-index: 2;"
-                                            autocomplete="off">
+                            // dropdownId: 드롭다운 select 요소 ID
+                            const dropdownId = `${fieldId}-dropdown`;
+                            // typeWarningId: 타입 경고 메시지 요소 ID
+                            const typeWarningId = `${fieldId}-type-warning`;
+
+                            if (useDropdownInput) {
+                                // 드롭다운 + 입력 하이브리드 UI
+                                inputHtml = `
+                                    <div style="position: relative;">
+                                        <div style="display: flex; gap: 8px; align-items: center;">
+                                            <div style="flex: 0 0 200px; position: relative;">
+                                                <select 
+                                                    id="${dropdownId}"
+                                                    class="node-settings-select node-variable-dropdown"
+                                                    style="width: 100%; padding: 8px; padding-left: 32px; border: 1px solid #ddd; border-radius: 4px; background-color: #f8f9fa;"
+                                                    title="이전 노드 출력 변수 선택">
+                                                    <option value="">← 이전 노드에서 선택...</option>
+                                                    <!-- 이전 노드 출력 변수 목록이 여기에 동적으로 추가됨 -->
+                                                </select>
+                                                <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #2673ea; font-size: 14px;">🔗</span>
+                                            </div>
+                                            <div style="position: relative; flex: 1;">
+                                                <input 
+                                                    type="text" 
+                                                    id="${fieldId}" 
+                                                    list="${datalistId}"
+                                                    value="${escapeHtml(value)}" 
+                                                    ${requiredAttr}
+                                                    placeholder="${escapeHtml(placeholder || '이전 노드 출력에서 선택하거나 직접 입력')}"
+                                                    class="node-settings-input node-field-path-input"
+                                                    style="width: 100%; padding: 8px; padding-left: 28px; border: 1px solid #ddd; border-left: 3px solid #2673ea; border-radius: 4px;"
+                                                    autocomplete="off">
+                                                <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #2673ea; font-size: 14px; font-weight: 600; z-index: 3;">←</span>
+                                                <div 
+                                                    id="${autocompleteId}"
+                                                    class="field-path-autocomplete-preview"
+                                                    style="position: absolute; left: 28px; top: 8px; right: 8px; pointer-events: none; color: #999; z-index: 1; white-space: pre; font-size: inherit; font-family: inherit; line-height: inherit;">
+                                                </div>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                id="${fieldId}-expand-btn"
+                                                class="btn btn-small field-path-expand-btn"
+                                                style="white-space: nowrap; padding: 8px 12px; font-size: 12px; flex-shrink: 0; min-width: 40px;"
+                                                title="이전 노드 출력 변수 목록 보기">
+                                                <span style="margin-right: 4px;">🔗</span>
+                                                <span class="expand-icon">▼</span>
+                                            </button>
+                                        </div>
+                                        <datalist id="${datalistId}">
+                                            <!-- 이전 노드 출력 변수 목록이 여기에 동적으로 추가됨 -->
+                                        </datalist>
                                         <div 
-                                            id="${autocompleteId}"
-                                            class="field-path-autocomplete-preview"
-                                            style="position: absolute; left: 8px; top: 8px; right: 8px; pointer-events: none; color: #999; z-index: 1; white-space: pre; font-size: inherit; font-family: inherit; line-height: inherit;">
+                                            id="${typeWarningId}"
+                                            class="node-parameter-type-warning"
+                                            style="display: none; margin-top: 4px; padding: 4px 8px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #856404; font-size: 12px;">
                                         </div>
                                     </div>
-                                    <datalist id="${datalistId}">
-                                        <!-- 이전 노드 출력 변수 목록이 여기에 동적으로 추가됨 -->
-                                    </datalist>
-                                    <button 
-                                        type="button" 
-                                        id="${fieldId}-expand-btn"
-                                        class="btn btn-small field-path-expand-btn"
-                                        style="white-space: nowrap; padding: 8px 12px; font-size: 12px; flex-shrink: 0; min-width: 40px;"
-                                        title="입력 데이터에서 변수 선택">
-                                        <span class="expand-icon">▼</span>
-                                    </button>
-                                </div>
-                            `;
+                                `;
+                            } else {
+                                // 기존 방식: 입력 필드 + 버튼
+                                const defaultPlaceholder =
+                                    placeholder ||
+                                    '이전 노드 출력에서 선택하거나 직접 입력 (예: outdata.output.execution_id)';
+                                inputHtml = `
+                                    <div style="position: relative; display: flex; gap: 8px; align-items: center;">
+                                        <div style="position: relative; flex: 1;">
+                                            <input 
+                                                type="text" 
+                                                id="${fieldId}" 
+                                                list="${datalistId}"
+                                                value="${escapeHtml(value)}" 
+                                                ${requiredAttr}
+                                                placeholder="${escapeHtml(defaultPlaceholder)}"
+                                                class="node-settings-input node-field-path-input"
+                                                style="width: 100%; padding: 8px; padding-left: 28px; padding-right: 8px; position: relative; z-index: 2; border-left: 3px solid #2673ea;"
+                                                autocomplete="off">
+                                            <span style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #2673ea; font-size: 14px; font-weight: 600; z-index: 3;">←</span>
+                                            <div 
+                                                id="${autocompleteId}"
+                                                class="field-path-autocomplete-preview"
+                                                style="position: absolute; left: 28px; top: 8px; right: 8px; pointer-events: none; color: #999; z-index: 1; white-space: pre; font-size: inherit; font-family: inherit; line-height: inherit;">
+                                            </div>
+                                        </div>
+                                        <datalist id="${datalistId}">
+                                            <!-- 이전 노드 출력 변수 목록이 여기에 동적으로 추가됨 -->
+                                        </datalist>
+                                        <button 
+                                            type="button" 
+                                            id="${fieldId}-expand-btn"
+                                            class="btn btn-small field-path-expand-btn"
+                                            style="white-space: nowrap; padding: 8px 12px; font-size: 12px; flex-shrink: 0; min-width: 50px; background-color: #e3f2fd; border-color: #2673ea; color: #2673ea;"
+                                            title="이전 노드 출력 변수 목록 보기">
+                                            <span style="margin-right: 4px;">🔗</span>
+                                            <span class="expand-icon">▼</span>
+                                        </button>
+                                        <div 
+                                            id="${typeWarningId}"
+                                            class="node-parameter-type-warning"
+                                            style="display: none; margin-top: 4px; padding: 4px 8px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #856404; font-size: 12px;">
+                                        </div>
+                                    </div>
+                                `;
+                            }
                         } else {
                             inputHtml = `
                                 <input 

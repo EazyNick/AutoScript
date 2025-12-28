@@ -68,7 +68,7 @@
        └── client/
            └── node-my-node.js    (복사)
   4. ZIP 파일 생성:
-     my-node.lsnode.zip           (최종 패키지)
+     my-node.asnode.zip           (최종 패키지)
 
 ┌─────────────────────────────────────────────────────────────────┐
 │ 4단계: 패키지 파일 생성 완료                                     │
@@ -77,7 +77,7 @@
 생성된 파일:
   project-root/
     └── exports/
-        └── my-node.lsnode.zip    (공유 가능한 패키지)
+        └── my-node.asnode.zip    (공유 가능한 패키지)
 
 개발자는 이 파일을:
   - 이메일로 공유
@@ -94,7 +94,7 @@
 └─────────────────────────────────────────────────────────────────┘
 
 사용자가 패키지 파일을 받음:
-  my-node.lsnode.zip
+  my-node.asnode.zip
 
 ┌─────────────────────────────────────────────────────────────────┐
 │ 2단계: 노드 플러그인 폴더에 배치                                 │
@@ -103,7 +103,7 @@
 사용자가 ZIP 파일을 특정 폴더에 복사:
   project-root/
     └── shared-nodes/              (노드 플러그인 폴더)
-        └── my-node.lsnode.zip     (복사)
+        └── my-node.asnode.zip     (복사)
 
 ┌─────────────────────────────────────────────────────────────────┐
 │ 3단계: 설치 스크립트 실행                                        │
@@ -121,7 +121,7 @@
 
 스크립트가 자동으로 수행:
   1. shared-nodes/ 폴더 스캔
-  2. .lsnode.zip 파일 감지
+  2. .asnode.zip 파일 감지
   3. 각 ZIP 파일 압축 해제:
      shared-nodes/my-node/
        ├── manifest.json
@@ -185,13 +185,13 @@
      │                                              │
      ▼                                              │
      │ 4. ZIP 패키지 생성                           │
-     │    my-node.lsnode.zip                        │
+     │    my-node.asnode.zip                        │
      │                                              │
      ▼                                              │
      │ 5. 파일 공유                                 │
      │    ────────────────────────────────────────> │
      │                                              │ 1. 패키지 다운로드
-     │                                              │    my-node.lsnode.zip
+     │                                              │    my-node.asnode.zip
      │                                              │
      │                                              ▼
      │                                              │ 2. 플러그인 폴더에 배치
@@ -272,12 +272,12 @@
      └── client/node-my-node.js
 
 7. ZIP 파일 생성
-   └──> exports/my-node.lsnode.zip
+   └──> exports/my-node.asnode.zip
 
 8. 임시 폴더 정리
    └──> temp-package/ 삭제
 
-출력: exports/my-node.lsnode.zip
+출력: exports/my-node.asnode.zip
 ```
 
 ### 5. 설치 스크립트 동작 상세
@@ -288,10 +288,10 @@
 └─────────────────────────────────────────────────────────────────┘
 
 1. shared-nodes/ 폴더 스캔
-   └──> .lsnode.zip 파일 찾기
+   └──> .asnode.zip 파일 찾기
 
 2. 각 ZIP 파일 처리
-   └──> for each .lsnode.zip:
+   └──> for each .asnode.zip:
         ├── 압축 해제
         │   └──> shared-nodes/{node-name}/
         │
@@ -380,7 +380,7 @@
 노드 공유를 위해 노드 패키지 구조를 표준화:
 
 ```
-{노드명}.lsnode.zip
+{노드명}.asnode.zip
 ├── manifest.json              # 노드 패키지 메타데이터 (필수)
 ├── node_config.json           # 노드 설정 (필수)
 ├── server/                    # 서버 측 파일 (Python 노드인 경우)
@@ -397,7 +397,7 @@
 ```json
 {
   "version": "1.0.0",
-  "format": "lostsword-node",
+  "format": "autoscript-node",
   "node_type": "my-custom-node",
   "node_category": "action",  // "action", "condition", "wait", "image", "boundary", "custom"
   "node_kind": "python",      // "python" 또는 "javascript"
@@ -536,7 +536,7 @@ export function generateMyCustomNodeOutput(nodeData) {
 ```json
 {
   "version": "1.0.0",
-  "format": "lostsword-node",
+  "format": "autoscript-node",
   "node_type": "my-custom-node",
   "metadata": {
     "name": "커스텀 노드",
@@ -610,8 +610,8 @@ class MyCustomNode(BaseNode):
 ```
 {프로젝트 루트}/
   shared-nodes/                # 공유 노드 폴더 (자동 감지)
-    ├── my-custom-node.lsnode.zip
-    ├── another-node.lsnode.zip
+    ├── my-custom-node.asnode.zip
+    ├── another-node.asnode.zip
     └── ...
 ```
 
@@ -713,7 +713,7 @@ CREATE TABLE shared_node_file_changes (
 
 **동작 흐름**:
 1. 서버 시작 시 `shared-nodes/` 폴더 스캔
-2. `.lsnode.zip` 파일 또는 압축 해제된 폴더 감지
+2. `.asnode.zip` 파일 또는 압축 해제된 폴더 감지
 3. **ZIP 파일 처리**:
    - ZIP 파일이면 압축 해제 (`shared-nodes/{노드명}/`)
    - 압축 해제된 폴더면 그대로 사용
@@ -821,7 +821,7 @@ CREATE TABLE shared_node_file_changes (
 # 노드를 ZIP 파일로 내보내기
 Response:
     - Content-Type: application/zip
-    - Content-Disposition: attachment; filename="{node_type}.lsnode.zip"
+    - Content-Disposition: attachment; filename="{node_type}.asnode.zip"
     - ZIP 파일 다운로드
 
 # GET /api/nodes/config
@@ -850,8 +850,8 @@ Response: {
 Response: {
     "files": [
         {
-            "file_path": "shared-nodes/my-custom-node.lsnode.zip",
-            "file_name": "my-custom-node.lsnode.zip",
+            "file_path": "shared-nodes/my-custom-node.asnode.zip",
+            "file_name": "my-custom-node.asnode.zip",
             "node_type": "my-custom-node",
             "metadata": {
                 "name": "커스텀 노드",
@@ -868,7 +868,7 @@ Response: {
 # POST /api/shared-nodes/files/load
 # 특정 노드 파일 강제 로드
 Request: {
-    "file_path": "shared-nodes/my-custom-node.lsnode.zip"
+    "file_path": "shared-nodes/my-custom-node.asnode.zip"
 }
 Response: {
     "node_type": "my-custom-node",
@@ -892,7 +892,7 @@ Response: {
             "node_kind": "python",
             "server_path": "server/nodes/customnodes/my-custom-node/node.py",
             "client_script": "node-my-custom-node.js",
-            "installed_from": "shared-nodes/my-custom-node.lsnode.zip",
+            "installed_from": "shared-nodes/my-custom-node.asnode.zip",
             "version": "1.0.0",
             "metadata": {...}
         }
@@ -952,7 +952,7 @@ Response: {
 
 1. **파일 시스템 보안**:
    - 파일 경로 검증 (Path Traversal 방지)
-   - 파일 확장자 검증 (`.lsnode.zip`만 허용)
+   - 파일 확장자 검증 (`.asnode.zip`만 허용)
    - ZIP 파일 내부 경로 검증 (상위 디렉토리 접근 방지)
    - 설치 경로 검증 (시스템 디렉토리 접근 방지)
 
@@ -1006,7 +1006,7 @@ Response: {
 ```json
 {
   "version": "1.0.0",
-  "format": "lostsword-script",
+  "format": "autoscript-script",
   "metadata": {
     "name": "로그인 자동화",
     "description": "사용자 로그인 프로세스를 자동화합니다",
@@ -1054,8 +1054,8 @@ Response: {
 
 #### 2.3 파일 명명 규칙
 
-- **스크립트 파일**: `{스크립트명}.lsscript.json`
-- **예시**: `로그인_자동화.lsscript.json`
+- **스크립트 파일**: `{스크립트명}.asscript.json`
+- **예시**: `로그인_자동화.asscript.json`
 - 파일명에 특수문자 제한 (파일 시스템 호환성)
 
 ### 2.4 스크립트 공유 폴더 구조
@@ -1063,8 +1063,8 @@ Response: {
 ```
 {프로젝트 루트}/
   shared-scripts/          # 공유 스크립트 폴더 (자동 감지)
-    ├── 로그인_자동화.lsscript.json
-    ├── 데이터_처리.lsscript.json
+    ├── 로그인_자동화.asscript.json
+    ├── 데이터_처리.asscript.json
     └── ...
 ```
 
@@ -1125,7 +1125,7 @@ CREATE TABLE shared_script_file_changes (
 
 **동작 흐름**:
 1. 서버 시작 시 `shared-scripts/` 폴더 스캔
-2. `.lsscript.json` 파일 감지
+2. `.asscript.json` 파일 감지
 3. 파일 해시 계산 (중복 체크)
 4. **필요한 노드 확인**:
    - `required_nodes` 목록 확인
@@ -1164,7 +1164,7 @@ CREATE TABLE shared_script_file_changes (
 # 스크립트를 JSON 파일로 내보내기
 Response:
     - Content-Type: application/json
-    - Content-Disposition: attachment; filename="{script_name}.lsscript.json"
+    - Content-Disposition: attachment; filename="{script_name}.asscript.json"
     - JSON 파일 다운로드
 
 # GET /api/shared-scripts/files
@@ -1172,8 +1172,8 @@ Response:
 Response: {
     "files": [
         {
-            "file_path": "shared-scripts/로그인_자동화.lsscript.json",
-            "file_name": "로그인_자동화.lsscript.json",
+            "file_path": "shared-scripts/로그인_자동화.asscript.json",
+            "file_name": "로그인_자동화.asscript.json",
             "metadata": {
                 "name": "로그인 자동화",
                 "author": "홍길동",
@@ -1191,7 +1191,7 @@ Response: {
 # POST /api/shared-scripts/files/load
 # 특정 파일 강제 로드
 Request: {
-    "file_path": "shared-scripts/로그인_자동화.lsscript.json"
+    "file_path": "shared-scripts/로그인_자동화.asscript.json"
 }
 Response: {
     "script_id": 123,
@@ -1401,13 +1401,13 @@ UI/src/
       dynamic-script-loader.js         # 동적 스크립트 로더 (신규)
 
 shared-nodes/                      # 공유 노드 폴더 (루트에 생성)
-  ├── {노드명}.lsnode.zip
+  ├── {노드명}.asnode.zip
   └── {노드명}/                    # 압축 해제된 폴더 (선택적)
       ├── node.py
       └── node_config.json
 
 shared-scripts/                    # 공유 스크립트 폴더 (루트에 생성)
-  ├── {스크립트명}.lsscript.json
+  ├── {스크립트명}.asscript.json
   └── ...
 ```
 

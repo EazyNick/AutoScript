@@ -88,14 +88,15 @@ export class NodeUpdateService {
             nodeManager.nodeData && nodeManager.nodeData[nodeId]
                 ? nodeManager.nodeData[nodeId].type || nodeElement.dataset.nodeType
                 : nodeElement.dataset.nodeType;
-        // isStart: 시작 노드 여부 (시작 노드는 타입 변경 불가)
-        const isStart = currentType === 'start';
-        // newType: 새로운 노드 타입 (시작 노드가 아니면 폼에서 가져옴, 시작 노드면 현재 타입 유지)
-        let newType = isStart ? currentType : document.getElementById('edit-node-type')?.value || currentType;
+        // isBoundary: 경계 노드 여부 (경계 노드는 타입 변경 불가)
+        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+        const isBoundary = isBoundaryNodeSync(currentType);
+        // newType: 새로운 노드 타입 (경계 노드가 아니면 폼에서 가져옴, 경계 노드면 현재 타입 유지)
+        let newType = isBoundary ? currentType : document.getElementById('edit-node-type')?.value || currentType;
 
-        // 노드 타입 변경 시 검증 (시작 노드로 변경하려는 경우)
-        // 시작 노드가 아니고 타입이 변경된 경우만 검증
-        if (!isStart && newType !== currentType) {
+        // 노드 타입 변경 시 검증 (경계 노드로 변경하려는 경우)
+        // 경계 노드가 아니고 타입이 변경된 경우만 검증
+        if (!isBoundary && newType !== currentType) {
             // validation: 타입 변경 검증 결과 (canChange, message 포함)
             const validation = NodeValidationUtils.validateNodeTypeChange(newType, nodeId, nodeManager);
             // 타입 변경이 불가능하면 에러 표시하고 원래 타입으로 되돌림
@@ -180,6 +181,27 @@ export class NodeUpdateService {
         } else {
             // textarea가 없으면 오버라이드 제거
             updatedNodeData.output_override = null;
+        }
+
+        // process-focus 노드의 경우 프로세스 선택 값 추가
+        if (newType === 'process-focus') {
+            const processIdInput = document.getElementById('edit-node-process-id');
+            const processHwndInput = document.getElementById('edit-node-process-hwnd');
+            const processNameInput = document.getElementById('edit-node-process-name');
+            const windowTitleInput = document.getElementById('edit-node-window-title');
+
+            if (processIdInput && processIdInput.value) {
+                updatedNodeData.process_id = parseInt(processIdInput.value, 10) || null;
+            }
+            if (processHwndInput && processHwndInput.value) {
+                updatedNodeData.hwnd = parseInt(processHwndInput.value, 10) || null;
+            }
+            if (processNameInput && processNameInput.value) {
+                updatedNodeData.process_name = processNameInput.value;
+            }
+            if (windowTitleInput && windowTitleInput.value) {
+                updatedNodeData.window_title = windowTitleInput.value;
+            }
         }
 
         // 파라미터 기반 데이터 추출

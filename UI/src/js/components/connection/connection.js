@@ -81,8 +81,8 @@ export class ConnectionManager {
      * @param {HTMLElement} nodeElement - 노드 DOM 요소
      * @returns {void}
      */
-    bindNodeConnector(nodeElement) {
-        this.eventHandler.bindNodeConnector(nodeElement);
+    async bindNodeConnector(nodeElement) {
+        await this.eventHandler.bindNodeConnector(nodeElement);
     }
 
     /**

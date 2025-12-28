@@ -29,7 +29,10 @@ def store_excel_objects(execution_id: str, excel_app: Any, workbook: Any, file_p
         "workbook": workbook,
         "file_path": file_path,
     }
-    logger.info(f"[ExcelManager] 엑셀 객체 저장 완료 - execution_id: {execution_id}, file_path: {file_path}")
+    logger.info(
+        f"[ExcelManager] 엑셀 객체 저장 완료 - execution_id: {execution_id}, file_path: {file_path}, "
+        f"현재 저장된 execution_id 목록: {list(_excel_objects.keys())}"
+    )
 
 
 def get_excel_objects(execution_id: str) -> dict[str, Any] | None:
@@ -42,7 +45,15 @@ def get_excel_objects(execution_id: str) -> dict[str, Any] | None:
     Returns:
         엑셀 객체 딕셔너리 또는 None
     """
-    return _excel_objects.get(execution_id)
+    result = _excel_objects.get(execution_id)
+    if result is None:
+        # 디버깅: 저장된 모든 execution_id 목록 로깅
+        stored_ids = list(_excel_objects.keys())
+        logger.warning(
+            f"[ExcelManager] 엑셀 객체를 찾을 수 없음 - 요청 execution_id: {execution_id}, "
+            f"저장된 execution_id 목록: {stored_ids}"
+        )
+    return result
 
 
 def close_excel_objects(execution_id: str, save_changes: bool = False) -> bool:
@@ -72,8 +83,12 @@ def close_excel_objects(execution_id: str, save_changes: bool = False) -> bool:
 
         if excel_app:
             # Excel 애플리케이션 종료
-            excel_app.Quit()
-            logger.info(f"[ExcelManager] Excel 애플리케이션 종료 완료 - execution_id: {execution_id}")
+            try:
+                excel_app.Quit()
+                logger.info(f"[ExcelManager] Excel 애플리케이션 종료 요청 완료 - execution_id: {execution_id}")
+            except Exception as e:
+                # Excel 종료 중 오류 발생 (이미 종료되었을 수 있음)
+                logger.warning(f"[ExcelManager] Excel 종료 중 오류 발생 (무시): {e}")
 
         # 저장소에서 제거
         del _excel_objects[execution_id]

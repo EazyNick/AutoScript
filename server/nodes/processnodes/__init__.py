@@ -1,6 +1,6 @@
 """
-액션 노드 모듈
-사용자 정의 액션 노드들을 관리합니다.
+프로세스 노드 모듈
+프로세스/시스템 제어 노드들을 관리합니다.
 
 이 모듈은 자동으로 모든 노드 클래스를 감지하여 로드합니다.
 새로운 노드를 추가할 때는 노드 파일만 생성하면 됩니다.
@@ -9,13 +9,12 @@
 import importlib
 import inspect
 from pathlib import Path
-import pkgutil
 
 from nodes.base_node import BaseNode
 
 # 자동으로 모든 노드 클래스를 감지하여 import
 _imported_nodes = {}
-_current_package = __package__ or "server.nodes.actionnodes"
+_current_package = __package__ or "server.nodes.processnodes"
 _current_dir = Path(__file__).parent
 
 # 현재 디렉토리의 모든 .py 파일을 스캔

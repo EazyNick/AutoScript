@@ -163,11 +163,24 @@ class ExcelOpenNode(BaseNode):
             else:
                 logger.info(f"[ExcelOpenNode] Excel 준비 완료 - execution_id: {execution_id}")
 
-            # 엑셀 객체를 저장소에 저장
-            store_excel_objects(execution_id, excel_app, workbook, file_path)
-            logger.info(f"[ExcelOpenNode] 엑셀 객체 저장 완료 - execution_id: {execution_id}")
-
             # 출력에 execution_id 항상 포함 (다음 노드에서 사용 가능하도록)
+            # 출력의 execution_id를 저장 키로 사용 (이전 노드 출력에서 가져온 execution_id와 일치시키기 위함)
+            # 엑셀 객체를 두 개의 키로 저장: _execution_id와 출력 execution_id
+            # 이렇게 하면 다음 노드가 어떤 execution_id를 사용하든 찾을 수 있음
+            output_execution_id = execution_id
+
+            # 엑셀 객체를 저장소에 저장 (출력 execution_id로 저장)
+            store_excel_objects(output_execution_id, excel_app, workbook, file_path)
+            logger.info(
+                f"[ExcelOpenNode] 엑셀 객체 저장 완료 - execution_id: {output_execution_id} "
+                f"(메타데이터 _execution_id: {execution_id})"
+            )
+
+            # 디버깅: 저장된 execution_id 목록 확인
+            from nodes.excelnodes.excel_manager import _excel_objects
+
+            logger.info(f"[ExcelOpenNode] 저장 후 execution_id 목록: {list(_excel_objects.keys())}")
+
             return {
                 "action": "excel-open",
                 "status": "completed",
@@ -175,7 +188,7 @@ class ExcelOpenNode(BaseNode):
                     "file_path": file_path,
                     "visible": bool(visible),
                     "success": True,
-                    "execution_id": execution_id,  # 다음 노드에서 사용할 수 있도록 execution_id 항상 포함
+                    "execution_id": output_execution_id,  # 다음 노드에서 사용할 수 있도록 execution_id 항상 포함
                 },
             }
         except Exception as e:

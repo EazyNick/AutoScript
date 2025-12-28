@@ -25,12 +25,11 @@ from models.process_focus_models import (
 )
 from models.response_models import ListResponse
 from nodes.excelnodes.excel_manager import cleanup_excel_objects
-from services.action_service import ActionService
+from services import action_service
 from services.node_execution_context import NodeExecutionContext
 from utils.execution_id_generator import generate_execution_id
 
 router = APIRouter(prefix="/api", tags=["actions"])
-action_service = ActionService()
 logger = log_manager.logger
 
 
@@ -90,6 +89,8 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
     # 반복 노드나 조건 노드에서 이전 반복/분기의 결과를 사용하기 위함
     if request.previous_node_result:
         prev_result = request.previous_node_result
+
+        # 이전 노드 결과는 {action, status, output} 형식
         prev_node_id = prev_result.get("node_id") or prev_result.get("_node_id") or "previous"
         prev_node_name = prev_result.get("node_name") or prev_result.get("_node_name") or "이전 노드"
         context.add_node_result(prev_node_id, prev_node_name, prev_result)
@@ -346,12 +347,21 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
             for i, node in enumerate(request.nodes):
                 node_id = node.get("id", f"node_{i}")
                 node_type = node.get("type", "unknown")
-                node_name = node.get("data", {}).get("title") or node.get("data", {}).get("name") or node_id
+                node_name = node.get("data", {}).get("title") or node.get("data", {}).get("name") or None
                 # 현재 노드 순번 계산 (클라이언트에서 전달된 순번 + 루프 인덱스)
                 current_node_number = start_index + i + 1
-                logger.info(
-                    f"[API] 노드 {current_node_number}/{total_nodes} 실행 시작 - ID: {node_id}, 타입: {node_type}, 이름: {node_name}"
-                )
+
+                # 노드 식별자 포맷팅
+                node_identifier_parts = []
+                if node_name:
+                    node_identifier_parts.append(node_name)
+                node_identifier_parts.append(f"({node_type})")
+                node_identifier_parts.append(f"#{current_node_number}/{total_nodes}")
+                if node_id and node_id != "start":
+                    node_identifier_parts.append(f"ID:{node_id}")
+                node_identifier = " ".join(node_identifier_parts)
+
+                logger.info(f"[API] 노드 실행 시작: {node_identifier}")
                 try:
                     # 실행 컨텍스트와 함께 노드 실행 (execution_id와 메타데이터 전달)
                     result = await action_service.process_node(
@@ -366,7 +376,11 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
                     if not isinstance(result, dict):
                         result = {"action": node.get("type", "unknown"), "status": "completed", "output": result}
 
-                    # 결과의 status가 "failed"인지 확인 (NodeExecutor가 에러를 catch해서 dict로 반환하는 경우)
+                    # output 필드가 없으면 추가
+                    if "output" not in result:
+                        result["output"] = None
+
+                    # 결과의 status가 "failed"인지 확인
                     if result.get("status") == "failed" or result.get("error"):
                         # 에러 발생 플래그 설정
                         has_error = True
@@ -384,7 +398,7 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
                     results.append(result)
                     logger.debug(f"[API] 노드 {i + 1} 실행 결과: {result}")
 
-                    # 에러 결과도 컨텍스트에 저장 (다음 노드에서 참조 가능)
+                    # 컨텍스트에 결과 저장
                     context.add_node_result(node_id, node_name, result)
                 except Exception as node_error:
                     logger.error(
@@ -420,13 +434,21 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
     )
     logger.debug(f"[API] 실행 결과 상세: {results}")
 
-    # 엑셀 객체 정리 (열려있는 엑셀 파일이 있으면 닫기)
-    # execution_id를 기준으로 해당 실행에서 생성된 엑셀 객체들을 정리
-    try:
-        cleanup_excel_objects(execution_id)
-    except Exception as e:
-        # 엑셀 객체 정리 실패해도 전체 실행에는 영향 없음 (경고만 출력)
-        logger.warning(f"[API] 엑셀 객체 정리 중 오류 발생 (무시): {e!s}")
+    # 엑셀 객체 정리 (엑셀 닫기 노드가 실행된 경우에만 정리)
+    # 각 노드가 별도의 API 호출로 실행되므로, 엑셀 객체를 즉시 정리하면 안 됨
+    # 엑셀 닫기 노드가 실행된 경우에만 정리하도록 함
+    excel_close_executed = any(
+        result.get("action") == "excel-close" and result.get("status") == "completed" for result in results
+    )
+    if excel_close_executed:
+        try:
+            cleanup_excel_objects(execution_id)
+            logger.info(f"[API] 엑셀 닫기 노드 실행으로 인한 엑셀 객체 정리 완료 - execution_id: {execution_id}")
+        except Exception as e:
+            # 엑셀 객체 정리 실패해도 전체 실행에는 영향 없음 (경고만 출력)
+            logger.warning(f"[API] 엑셀 객체 정리 중 오류 발생 (무시): {e!s}")
+    else:
+        logger.debug(f"[API] 엑셀 닫기 노드가 실행되지 않아 엑셀 객체를 유지합니다 - execution_id: {execution_id}")
 
     # 실행 완료 시간 계산 (밀리초 단위)
     # execution_start_time이 있으면 현재 시간과의 차이를 밀리초로 변환
@@ -452,12 +474,11 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
 
     # 에러가 발생했으면 success: False 반환
     if has_error:
-        # 에러 발생 시에도 엑셀 객체 정리 (리소스 누수 방지)
-        try:
-            cleanup_excel_objects(execution_id)
-        except Exception as e:
-            # 엑셀 객체 정리 실패해도 전체 실행에는 영향 없음 (경고만 출력)
-            logger.warning(f"[API] 엑셀 객체 정리 중 오류 발생 (무시): {e!s}")
+        # 에러 발생 시에도 엑셀 객체는 유지 (다음 노드에서 사용할 수 있도록)
+        # 엑셀 닫기 노드가 실행되지 않았으면 엑셀 객체를 정리하지 않음
+        logger.debug(
+            f"[API] 에러 발생했지만 엑셀 객체는 유지합니다 (다음 노드에서 사용 가능) - execution_id: {execution_id}"
+        )
 
         logger.warning(f"[API] 노드 실행 중 오류 발생 - 에러 메시지: {error_message}")
         # 에러 응답 반환 (success: False, 에러 메시지와 결과 포함)

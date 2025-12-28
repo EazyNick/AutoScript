@@ -16,53 +16,83 @@ echo Starting Linting and Formatting
 echo ========================================
 echo.
 
+REM Get the directory where this script is located (absolute path)
+set "SCRIPT_DIR=%~dp0"
+REM Remove trailing backslash
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+
 REM Save original directory (where script was executed from)
-set ORIGINAL_DIR=%CD%
+set "ORIGINAL_DIR=%CD%"
 
 REM Find project root directory (where server/ and UI/ folders exist)
-REM Check if already in project root
-if exist "server" (
-    if exist "UI" (
-        echo Already in project root: %CD%
-        goto :found_root
+REM Start from script directory and go up until we find server/ and UI/
+set "PROJECT_ROOT="
+
+REM Try up to 5 levels up from script location
+cd /d "%SCRIPT_DIR%"
+for /L %%i in (0,1,5) do (
+    if exist "server" (
+        if exist "UI" (
+            set "PROJECT_ROOT=!CD!"
+            goto :root_found
+        )
     )
+    REM Go up one level
+    cd /d ".."
 )
 
-REM If running from scripts folder, go up one level
-if exist "..\server" (
-    if exist "..\UI" (
-        cd ..
-        echo Changed to project root: %CD%
-        goto :found_root
+REM If not found, try from original directory
+cd /d "%ORIGINAL_DIR%"
+for /L %%i in (0,1,5) do (
+    if exist "server" (
+        if exist "UI" (
+            set "PROJECT_ROOT=!CD!"
+            goto :root_found
+        )
     )
-)
-
-REM Try going up one more level (in case we're deeper)
-cd ..
-if exist "server" (
-    if exist "UI" (
-        echo Found project root: %CD%
-        goto :found_root
-    )
-)
-
-REM If still not found, try one more level
-cd ..
-if exist "server" (
-    if exist "UI" (
-        echo Found project root: %CD%
-        goto :found_root
-    )
+    REM Go up one level
+    cd /d ".."
 )
 
 REM Project root not found
 echo [ERROR] Cannot find project root directory.
-echo Please run this script from the project root or scripts folder.
+echo Please ensure server/ and UI/ folders exist.
+echo Script location: %SCRIPT_DIR%
 echo Current location: %ORIGINAL_DIR%
 echo.
-echo Looking for folders: server/ and UI/
 pause
 exit /b 1
+
+:root_found
+REM Normalize path (convert to absolute path)
+cd /d "%PROJECT_ROOT%"
+set "PROJECT_ROOT=%CD%"
+
+REM Verify project root exists
+if not exist "%PROJECT_ROOT%\server" (
+    echo [ERROR] Cannot find server folder in project root.
+    echo Project root: %PROJECT_ROOT%
+    echo Current location: %ORIGINAL_DIR%
+    echo.
+    echo Looking for folders: server/ and UI/
+    pause
+    exit /b 1
+)
+
+if not exist "%PROJECT_ROOT%\UI" (
+    echo [ERROR] Cannot find UI folder in project root.
+    echo Project root: %PROJECT_ROOT%
+    echo Current location: %ORIGINAL_DIR%
+    echo.
+    echo Looking for folders: server/ and UI/
+    pause
+    exit /b 1
+)
+
+REM Change to project root
+cd /d "%PROJECT_ROOT%"
+echo Found project root: %CD%
+echo.
 
 :found_root
 echo Working directory: %CD%
@@ -115,21 +145,84 @@ echo Attempting to use system Python or PATH...
 echo.
 
 :venv_activated
-REM Check if ruff command exists (after venv activation)
-where ruff >nul 2>&1
+REM Verify Python is available
+where python >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] ruff command not found.
-    echo Please ensure:
-    echo   1. Python virtual environment is activated, OR
-    echo   2. ruff is installed: pip install ruff
+    echo [ERROR] Python command not found.
+    echo Please ensure Python is installed and in PATH.
     echo.
     goto :check_npm
 )
 
+REM Check Python version and location
+echo Python version:
+python --version
+echo Python location:
+where python
+echo.
+
+REM Check if we're in a virtual environment (VIRTUAL_ENV variable)
+if defined VIRTUAL_ENV (
+    echo Virtual environment active: %VIRTUAL_ENV%
+) else (
+    echo [INFO] VIRTUAL_ENV not set. Using system Python or PATH.
+)
+echo.
+
+REM Try to find ruff in multiple ways
+set "RUFF_CMD="
+
+REM Method 1: Check if ruff is in PATH
+where ruff >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set "RUFF_CMD=ruff"
+    goto :ruff_found
+)
+
+REM Method 2: Check in common virtual environment locations
+if exist "venv\Scripts\ruff.exe" (
+    set "RUFF_CMD=venv\Scripts\ruff.exe"
+    goto :ruff_found
+)
+if exist ".venv\Scripts\ruff.exe" (
+    set "RUFF_CMD=.venv\Scripts\ruff.exe"
+    goto :ruff_found
+)
+if exist "env\Scripts\ruff.exe" (
+    set "RUFF_CMD=env\Scripts\ruff.exe"
+    goto :ruff_found
+)
+
+REM Method 3: Try python -m ruff
+python -m ruff --version >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set "RUFF_CMD=python -m ruff"
+    goto :ruff_found
+)
+
+REM Ruff not found - provide helpful error message
+echo [ERROR] ruff command not found.
+echo.
+echo Please install ruff in your virtual environment:
+echo   pip install ruff
+echo.
+echo Or install development dependencies:
+echo   pip install -r server/requirements-dev.txt
+echo.
+echo Current Python: 
+python --version
+echo Current directory: %CD%
+echo.
+goto :check_npm
+
+:ruff_found
+echo Found ruff: %RUFF_CMD%
+echo.
+
 REM Python linting and formatting (server)
 REM Run from project root (do not change to server folder)
 echo [1/5] Python linting check and auto-fix (server)...
-ruff check --fix server/
+%RUFF_CMD% check --fix server/
 set PYTHON_LINT_ERROR=%ERRORLEVEL%
 if !PYTHON_LINT_ERROR! NEQ 0 (
     echo [WARNING] Python linting check failed. (Error code: !PYTHON_LINT_ERROR!)
@@ -139,7 +232,7 @@ if !PYTHON_LINT_ERROR! NEQ 0 (
 echo.
 
 echo [2/5] Python formatting (server)...
-ruff format server/
+%RUFF_CMD% format server/
 set PYTHON_FORMAT_ERROR=%ERRORLEVEL%
 if !PYTHON_FORMAT_ERROR! NEQ 0 (
     echo [WARNING] Python formatting failed. (Error code: !PYTHON_FORMAT_ERROR!)
@@ -148,17 +241,48 @@ if !PYTHON_FORMAT_ERROR! NEQ 0 (
 )
 echo.
 
-REM Check if mypy command exists
+REM Try to find mypy in multiple ways
+set "MYPY_CMD="
+
+REM Method 1: Check if mypy is in PATH
 where mypy >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [WARNING] mypy command not found. Skipping type checking.
-    echo Please install mypy: pip install mypy
-    echo.
-    goto :check_npm
+if %ERRORLEVEL% EQU 0 (
+    set "MYPY_CMD=mypy"
+    goto :mypy_found
 )
 
+REM Method 2: Check in common virtual environment locations
+if exist "venv\Scripts\mypy.exe" (
+    set "MYPY_CMD=venv\Scripts\mypy.exe"
+    goto :mypy_found
+)
+if exist ".venv\Scripts\mypy.exe" (
+    set "MYPY_CMD=.venv\Scripts\mypy.exe"
+    goto :mypy_found
+)
+if exist "env\Scripts\mypy.exe" (
+    set "MYPY_CMD=env\Scripts\mypy.exe"
+    goto :mypy_found
+)
+
+REM Method 3: Try python -m mypy
+python -m mypy --version >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set "MYPY_CMD=python -m mypy"
+    goto :mypy_found
+)
+
+REM Mypy not found - skip with warning
+echo [WARNING] mypy command not found. Skipping type checking.
+echo Please install mypy: pip install mypy
+echo Or install development dependencies: pip install -r server/requirements-dev.txt
+echo.
+goto :check_npm
+
+:mypy_found
+echo Found mypy: %MYPY_CMD%
 echo [3/5] Mypy type checking (server)...
-mypy server/
+%MYPY_CMD% server/
 set MYPY_ERROR=%ERRORLEVEL%
 if !MYPY_ERROR! NEQ 0 (
     echo [WARNING] Mypy type checking failed. (Error code: !MYPY_ERROR!)
@@ -188,10 +312,10 @@ if not exist "UI" (
     goto :end
 )
 
-cd UI
+cd /d "%PROJECT_ROOT%\UI"
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Cannot change to UI folder.
-    cd %ORIGINAL_DIR%
+    echo Project root: %PROJECT_ROOT%
     goto :end
 )
 
@@ -215,8 +339,12 @@ if !JS_FORMAT_ERROR! NEQ 0 (
 )
 echo.
 
-REM Return to original directory
-cd %ORIGINAL_DIR%
+REM Return to original directory (if it still exists)
+if exist "%ORIGINAL_DIR%" (
+    cd /d "%ORIGINAL_DIR%"
+) else (
+    echo [INFO] Original directory no longer exists, staying in project root.
+)
 
 :end
 echo.

@@ -23,15 +23,6 @@ export function generatePreviewOutput(nodeType, nodeData) {
         case 'condition':
             return generateConditionOutput(nodeData);
 
-        case 'file-read':
-            return generateFileReadOutput(nodeData);
-
-        case 'file-write':
-            return generateFileWriteOutput(nodeData);
-
-        case 'http-api-request':
-            return generateHttpApiRequestOutput(nodeData);
-
         default:
             return generateDefaultOutput(nodeType);
     }
@@ -100,10 +91,11 @@ function generateProcessFocusOutput(nodeData) {
             action: 'process-focus',
             status: 'completed',
             output: {
+                success: true,
                 process_id: nodeData?.process_id || 1234,
                 process_name: nodeData?.process_name || 'example.exe',
                 hwnd: nodeData?.hwnd || 5678,
-                focused: true
+                window_title: nodeData?.window_title || 'Example Window'
             }
         },
         null,
@@ -123,84 +115,6 @@ function generateConditionOutput(nodeData) {
             output: {
                 condition: condition,
                 result: true
-            }
-        },
-        null,
-        2
-    );
-}
-
-/**
- * 파일 읽기 노드 예시 출력
- */
-function generateFileReadOutput(nodeData) {
-    const filePath = nodeData?.file_path || 'C:/data/example.txt';
-    const encoding = nodeData?.encoding || 'utf-8';
-    return JSON.stringify(
-        {
-            action: 'file-read',
-            status: 'completed',
-            output: {
-                file_path: filePath,
-                encoding: encoding,
-                content: '파일 내용 예시\n여러 줄의 텍스트가 있을 수 있습니다.',
-                size: 1024
-            }
-        },
-        null,
-        2
-    );
-}
-
-/**
- * 파일 쓰기 노드 예시 출력
- */
-function generateFileWriteOutput(nodeData) {
-    const writeFilePath = nodeData?.file_path || 'C:/data/output.txt';
-    const content = nodeData?.content || '작성할 내용';
-    const mode = nodeData?.mode || 'w';
-    const writeEncoding = nodeData?.encoding || 'utf-8';
-    return JSON.stringify(
-        {
-            action: 'file-write',
-            status: 'completed',
-            output: {
-                file_path: writeFilePath,
-                content: content,
-                mode: mode,
-                encoding: writeEncoding,
-                written: true,
-                bytes_written: content.length
-            }
-        },
-        null,
-        2
-    );
-}
-
-/**
- * HTTP API 요청 노드 예시 출력
- */
-function generateHttpApiRequestOutput(nodeData) {
-    const url = nodeData?.url || 'https://api.example.com/endpoint';
-    const method = nodeData?.method || 'GET';
-    const headers = nodeData?.headers || {};
-    const body = nodeData?.body || {};
-    return JSON.stringify(
-        {
-            action: 'http-api-request',
-            status: 'completed',
-            output: {
-                success: true,
-                status_code: 200,
-                status_text: 'OK',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                data: {
-                    message: '요청 성공',
-                    data: body
-                }
             }
         },
         null,

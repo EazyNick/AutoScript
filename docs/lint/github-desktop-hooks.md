@@ -74,7 +74,7 @@ GitHub Desktop에서 메시지를 자세히 보려면:
 #### 방법 1: 터미널에서 직접 실행
 ```bash
 # 프로젝트 루트로 이동
-cd C:\Users\User\Desktop\python\LostSword_AutoScript
+cd C:\Users\User\Desktop\python\AutoScript
 
 # 린팅 스크립트 실행
 python scripts/linting/lint.py
@@ -84,7 +84,7 @@ python scripts/linting/lint.py
 ```bash
 # Git Bash 열기
 # 프로젝트 루트로 이동
-cd /c/Users/User/Desktop/python/LostSword_AutoScript
+cd /c/Users/User/Desktop/python/AutoScript
 
 # 커밋 (메시지가 터미널에 표시됨)
 git commit -m "your message"
@@ -93,7 +93,7 @@ git commit -m "your message"
 #### 방법 3: PowerShell에서 커밋
 ```powershell
 # PowerShell 열기
-cd C:\Users\User\Desktop\python\LostSword_AutoScript
+cd C:\Users\User\Desktop\python\AutoScript
 
 # 커밋 (메시지가 터미널에 표시됨)
 git commit -m "your message"

@@ -1,19 +1,26 @@
 """통합 데이터베이스 관리자 모듈"""
 
+from __future__ import annotations
+
 import logging
 import os
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from logging import Logger
 
 # 로거 초기화
 logger = logging.getLogger(__name__)
 
 # 직접 실행 시와 모듈로 import 시 모두 지원
 try:
+    from execution_logging.execution_log_repository import NodeExecutionLogRepository
+
     from .connection import DatabaseConnection
     from .dashboard_stats_repository import DashboardStatsRepository
     from .log_stats_repository import LogStatsRepository
-    from .node_execution_log_repository import NodeExecutionLogRepository
     from .node_repository import NodeRepository
     from .script_repository import ScriptRepository
     from .table_manager import TableManager
@@ -21,10 +28,11 @@ try:
 except ImportError:
     # 직접 실행 시 절대 import 사용
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from execution_logging.execution_log_repository import NodeExecutionLogRepository
+
     from db.connection import DatabaseConnection
     from db.dashboard_stats_repository import DashboardStatsRepository
     from db.log_stats_repository import LogStatsRepository
-    from db.node_execution_log_repository import NodeExecutionLogRepository
     from db.node_repository import NodeRepository
     from db.script_repository import ScriptRepository
     from db.table_manager import TableManager
@@ -500,7 +508,7 @@ class DatabaseManager:
         finally:
             conn.close()
 
-    def seed_example_data(self, logger: logging.Logger | None = None) -> None:
+    def seed_example_data(self, logger: Logger | None = None) -> None:
         """
         예시 데이터 생성
 
@@ -511,7 +519,7 @@ class DatabaseManager:
         cursor = self.connection.get_cursor(conn)
 
         # 로거가 없으면 print 사용
-        log_func = logger.info if logger else print
+        log_func: Callable[[str], None] = logger.info if logger else print
 
         try:
             # 기존 데이터 확인
@@ -583,15 +591,22 @@ class DatabaseManager:
                 },
                 {
                     "id": "node1",
-                    "type": "image-touch",
+                    "type": "process-focus",
                     "position": {"x": 300.0, "y": 0.0},
+                    "data": {"title": "화면 포커스"},
+                    "parameters": {"process_id": 1234},
+                },
+                {
+                    "id": "node2",
+                    "type": "image-touch",
+                    "position": {"x": 600.0, "y": 0.0},
                     "data": {"title": "이미지 터치"},
                     "parameters": {"folder_path": "C:/Users/User/Desktop/images", "image_count": 5},
                 },
                 {
-                    "id": "node2",
+                    "id": "node3",
                     "type": "wait",
-                    "position": {"x": 600.0, "y": 0.0},
+                    "position": {"x": 900.0, "y": 0.0},
                     "data": {"title": "대기"},
                     "parameters": {"wait_time": 2.0},
                 },
@@ -600,6 +615,7 @@ class DatabaseManager:
             script2_connections = [
                 {"from": "start", "to": "node1", "outputType": None},
                 {"from": "node1", "to": "node2", "outputType": None},
+                {"from": "node2", "to": "node3", "outputType": None},
             ]
 
             self.nodes.save_nodes(script2_id, script2_nodes, script2_connections)
@@ -633,8 +649,20 @@ class DatabaseManager:
                 },
                 {
                     "id": "node2",
-                    "type": "excel-close",
+                    "type": "excel-select-sheet",
                     "position": {"x": 600.0, "y": 0.0},
+                    "data": {"title": "엑셀 시트 선택"},
+                    "parameters": {
+                        "execution_id": "",  # 실행 시 이전 노드 출력에서 자동으로 가져옴
+                        "sheet_name": "Sheet1",  # 시트 이름으로 선택
+                        "sheet_index": None,
+                    },
+                    "description": "엑셀 시트 선택",
+                },
+                {
+                    "id": "node3",
+                    "type": "excel-close",
+                    "position": {"x": 900.0, "y": 0.0},
                     "data": {"title": "엑셀 닫기"},
                     "parameters": {
                         "execution_id": "",  # 실행 시 이전 노드 출력에서 자동으로 가져옴
@@ -660,6 +688,7 @@ class DatabaseManager:
             script3_connections = [
                 {"from": "start", "to": "node1", "outputType": None},
                 {"from": "node1", "to": "node2", "outputType": None},
+                {"from": "node2", "to": "node3", "outputType": None},
                 # TODO: 새로운 엑셀 노드를 추가할 때 연결도 추가하세요.
                 # 예시:
                 # {"from": "node2", "to": "node3", "outputType": None},

@@ -16,6 +16,9 @@ const NODE_ICONS = {
     wait: '🕐', // 대기 노드: 시계 아이콘
     'image-touch': '🖼️', // 이미지 터치 노드: 이미지 아이콘
     'process-focus': '🖥️', // 프로세스 포커스 노드: 모니터 아이콘
+    'excel-open': '📊', // 엑셀 열기 노드: 차트 아이콘
+    'excel-select-sheet': '📋', // 엑셀 시트 선택 노드: 클립보드 아이콘
+    'excel-close': '📕', // 엑셀 닫기 노드: 책 아이콘
 
     // 로직 노드
     condition: '🔐', // 조건 노드: 자물쇠 아이콘

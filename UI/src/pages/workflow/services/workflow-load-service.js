@@ -121,26 +121,30 @@ export class WorkflowLoadService {
 
                 // 노드가 있으면 화면에 렌더링
                 if (nodes.length > 0) {
-                    // 서버에서 불러온 노드에 start가 포함되어 있는지 확인
-                    // hasStartNode: 시작 노드가 포함되어 있는지 여부
-                    const hasStartNode = nodes.some((n) => n.id === 'start' || n.type === 'start');
+                    // 서버에서 불러온 노드에 경계 노드가 포함되어 있는지 확인
+                    // hasBoundaryNode: 경계 노드가 포함되어 있는지 여부
+                    const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+                    const hasBoundaryNode = nodes.some((n) => {
+                        const nodeType = n.type || (n.id === 'start' ? 'start' : null);
+                        return nodeType && isBoundaryNodeSync(nodeType);
+                    });
 
-                    log(`[WorkflowPage] 서버 노드 확인 - start: ${hasStartNode}`);
+                    log(`[WorkflowPage] 서버 노드 확인 - 경계 노드: ${hasBoundaryNode}`);
 
                     // 노드들을 화면에 렌더링
                     await this.renderNodes(nodes, connections, nodeManager);
                 } else {
                     // 노드가 없을 때만 기본 시작 노드 생성
                     log('[WorkflowPage] 노드가 없어 기본 시작 노드 생성');
-                    this.workflowPage.createDefaultBoundaryNodes();
+                    await this.workflowPage.createDefaultBoundaryNodes();
                 }
             } else {
                 logError('[WorkflowPage] ⚠️ ScriptAPI를 사용할 수 없거나 script.id가 없습니다.');
-                this.workflowPage.createDefaultBoundaryNodes();
+                await this.workflowPage.createDefaultBoundaryNodes();
             }
         } catch (error) {
             logError('[WorkflowPage] ❌ 노드 데이터 로드 실패:', error);
-            this.workflowPage.createDefaultBoundaryNodes();
+            await this.workflowPage.createDefaultBoundaryNodes();
         } finally {
             // 로딩 완료
             this.isLoading = false;
@@ -501,11 +505,6 @@ export class WorkflowLoadService {
                             }
                         }
                     }
-                }
-
-                // process-focus 노드는 별도 처리 (비동기 검증 필요)
-                if (nodeType === 'process-focus') {
-                    await this.restoreProcessFocusNode(nodeData, nodeManager, nodeDataForManager);
                 }
             }
         }

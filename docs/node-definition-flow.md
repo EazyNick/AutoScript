@@ -21,11 +21,11 @@
 
 ```python
 NODES_CONFIG: dict[str, dict[str, Any]] = {
-    "loop": {
+    "repeat": {
         "label": "반복 노드",              # UI에 표시될 라벨
-        "title": "반복 노드",               # 기본 제목
-        "description": "노드 블록을 반복 실행하는 노드입니다.",  # 설명
-        "script": "node-loop.js",          # 프론트엔드에서 로드할 JS 파일명
+        "title": "반복",               # 기본 제목
+        "description": "아래에 연결된 노드들을 지정한 횟수만큼 반복 실행하는 노드입니다.",  # 설명
+        "script": "node-repeat.js",          # 프론트엔드에서 로드할 JS 파일명
         "is_boundary": False,              # 경계 노드 여부 (start/end)
         "category": "logic",               # 카테고리 (system/action/logic)
         "detail_types": {                  # 상세 노드 타입 (하위 카테고리)
@@ -74,7 +74,7 @@ interface NodeConfig {
     label: string;              // UI 표시 라벨
     title: string;               // 기본 제목
     description: string;         // 설명
-    script: string;              // JS 파일명 (예: "node-loop.js")
+    script: string;              // JS 파일명 (예: "node-repeat.js")
     isBoundary: boolean;        // 경계 노드 여부
     category: string;            // "system" | "action" | "logic"
     requiresFolderPath?: boolean; // 폴더 경로 필요 여부 (image-touch 등)
@@ -223,7 +223,7 @@ interface ApiResponse {
 | `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | 내부 DB ID |
 | `script_id` | INTEGER | NOT NULL, FOREIGN KEY | 스크립트 ID (scripts 테이블 참조) |
 | `node_id` | TEXT | NOT NULL | 노드 고유 ID (예: "loop_start", "node_123") |
-| `node_type` | TEXT | NOT NULL | 노드 타입 (예: "loop", "wait", "action") |
+| `node_type` | TEXT | NOT NULL | 노드 타입 (예: "repeat", "wait", "action") |
 | `position_x` | REAL | NOT NULL | X 좌표 |
 | `position_y` | REAL | NOT NULL | Y 좌표 |
 | `node_data` | TEXT | NOT NULL | 노드 데이터 (JSON 문자열) |
@@ -247,8 +247,7 @@ interface ApiResponse {
 ```json
 {
     "title": "반복 시작 (3회)",
-    "action_node_type": "loop-start",
-    "loop_count": 3,
+    "repeat_count": 3,
     "folder_path": "...",  // image-touch 노드인 경우
     "process_id": 123,     // process-focus 노드인 경우
     // ... 기타 노드별 데이터
@@ -261,7 +260,7 @@ interface ApiResponse {
 
 ```json
 {
-    "loop_count": 3,           // loop 노드
+    "repeat_count": 3,           // repeat 노드
     "wait_time": 0.5,          // wait 노드
     "folder_path": "C:\\...",  // image-touch 노드
     "condition": "...",         // condition 노드
@@ -322,14 +321,14 @@ const configs = await registry.getAllConfigs();
 
 // NODE_TYPES 생성 (대문자 상수)
 NODE_TYPES = {
-    LOOP: "loop",
+    REPEAT: "repeat",
     WAIT: "wait",
     // ...
 };
 
 // NODE_TYPE_LABELS 생성
 NODE_TYPE_LABELS = {
-    "loop": "반복 노드",
+    "repeat": "반복 노드",
     "wait": "대기 노드",
     // ...
 };
@@ -352,25 +351,23 @@ NODE_TYPE_LABELS = {
     title: "반복 시작 (3회)",
     x: 300,
     y: 0,
-    // nodeManager.nodeData[loop_start]에 저장된 데이터
-    action_node_type: "loop-start",
-    loop_count: 3
+    // nodeManager.nodeData[repeat_node]에 저장된 데이터
+    repeat_count: 3
 }
 
 // ↓ 변환
 
 // API 전송 형식
 {
-    id: "loop_start",
-    type: "loop",
+    id: "repeat_node",
+    type: "repeat",
     position: { x: 300, y: 0 },
     data: {
-        title: "반복 시작 (3회)",
-        action_node_type: "loop-start",
-        loop_count: 3
+        title: "반복 (3회)",
+        repeat_count: 3
     },
     parameters: {
-        loop_count: 3  // 실행에 필요한 핵심 파라미터만
+        repeat_count: 3  // 실행에 필요한 핵심 파라미터만
     },
     description: "반복 횟수: 3회"
 }
@@ -384,16 +381,15 @@ NODE_TYPE_LABELS = {
 ```python
 # API에서 받은 노드 데이터
 node = {
-    "id": "loop_start",
-    "type": "loop",
+    "id": "repeat_node",
+    "type": "repeat",
     "position": {"x": 300.0, "y": 0.0},
     "data": {
-        "title": "반복 시작 (3회)",
-        "action_node_type": "loop-start",
-        "loop_count": 3
+        "title": "반복 (3회)",
+        "repeat_count": 3
     },
     "parameters": {
-        "loop_count": 3
+        "repeat_count": 3
     },
     "description": "반복 횟수: 3회"
 }
@@ -403,8 +399,8 @@ node = {
 # SQL INSERT
 INSERT INTO nodes (
     script_id,      # 1
-    node_id,        # "loop_start"
-    node_type,      # "loop"
+    node_id,        # "repeat_node"
+    node_type,      # "repeat"
     position_x,     # 300.0
     position_y,     # 0.0
     node_data,      # JSON: {"title": "...", "action_node_type": "loop-start", ...}
@@ -462,26 +458,25 @@ ORDER BY id
 **파싱 로직**:
 ```python
 # DB에서 조회한 row
-row = (5, "loop_start", "loop", 300.0, 0.0, 
-       '{"title":"반복 시작 (3회)","action_node_type":"loop-start","loop_count":3}',
-       '["wait_node"]', '["start"]', '{"loop_count":3}', "반복 횟수: 3회")
+row = (5, "repeat_node", "repeat", 300.0, 0.0, 
+       '{"title":"반복 (3회)","repeat_count":3}',
+       '["wait_node"]', '["start"]', '{"repeat_count":3}', "반복 횟수: 3회")
 
 # ↓ 파싱
 
 # 반환 객체
 {
-    "id": "loop_start",
-    "type": "loop",
+    "id": "repeat_node",
+    "type": "repeat",
     "position": {"x": 300.0, "y": 0.0},
     "data": {
-        "title": "반복 시작 (3회)",
-        "action_node_type": "loop-start",
-        "loop_count": 3
+        "title": "반복 (3회)",
+        "repeat_count": 3
     },
     "connected_to": ["wait_node"],
     "connected_from": ["start"],
     "parameters": {
-        "loop_count": 3
+        "repeat_count": 3
     },
     "description": "반복 횟수: 3회",
     "_db_id": 5  # 내부적으로 사용
@@ -496,16 +491,15 @@ row = (5, "loop_start", "loop", 300.0, 0.0,
 ```javascript
 // API에서 받은 노드 데이터
 const nodeData = {
-    id: "loop_start",
-    type: "loop",
+    id: "repeat_node",
+    type: "repeat",
     position: { x: 300.0, y: 0.0 },
     data: {
-        title: "반복 시작 (3회)",
-        action_node_type: "loop-start",
-        loop_count: 3
+        title: "반복 (3회)",
+        repeat_count: 3
     },
     parameters: {
-        loop_count: 3
+        repeat_count: 3
     },
     description: "반복 횟수: 3회"
 };
@@ -540,7 +534,7 @@ nodeManager.nodeData["loop_start"] = {
 **렌더링 과정**:
 1. 노드 DOM 요소 생성
 2. `nodeManager.generateNodeContent(nodeData)` 호출
-3. 노드 타입별 렌더러 (`node-loop.js` 등)에서 HTML 생성
+3. 노드 타입별 렌더러 (`node-repeat.js` 등)에서 HTML 생성
 4. DOM에 추가 및 이벤트 리스너 설정
 
 ---
@@ -551,7 +545,7 @@ nodeManager.nodeData["loop_start"] = {
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. 서버 시작 시 노드 정의 로드                                │
 │    server/config/nodes_config.py                             │
-│    NODES_CONFIG = { "loop": {...}, "wait": {...}, ... }      │
+│    NODES_CONFIG = { "repeat": {...}, "wait": {...}, ... }      │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -622,28 +616,23 @@ nodeManager.nodeData["loop_start"] = {
 ### 9.1 서버 측 노드 정의 객체
 ```python
 {
-    "loop": {
+    "repeat": {
         "label": "반복 노드",
-        "title": "반복 노드",
-        "description": "...",
-        "script": "node-loop.js",
+        "title": "반복",
+        "description": "아래에 연결된 노드들을 지정한 횟수만큼 반복 실행하는 노드입니다.",
+        "script": "node-repeat.js",
         "is_boundary": False,
         "category": "logic",
-        "detail_types": {
-            "loop-start": {
-                "label": "반복 시작",
-                "description": "...",
-                "icon": "▶",
-                "parameters": {
-                    "loop_count": {
-                        "type": "number",
-                        "label": "반복 횟수",
-                        "default": 1,
-                        "min": 1,
-                        "max": 10000,
-                        "required": True
-                    }
-                }
+        "has_bottom_output": True,
+        "parameters": {
+            "repeat_count": {
+                "type": "number",
+                "label": "반복 횟수",
+                "description": "반복할 횟수를 설정합니다.",
+                "default": 1,
+                "min": 1,
+                "max": 10000,
+                "required": True
             }
         }
     }
@@ -669,18 +658,17 @@ description: "반복 횟수: 3회"
 ### 9.3 API 응답 객체
 ```json
 {
-    "id": "loop_start",
-    "type": "loop",
+    "id": "repeat_node",
+    "type": "repeat",
     "position": {"x": 300.0, "y": 0.0},
     "data": {
-        "title": "반복 시작 (3회)",
-        "action_node_type": "loop-start",
-        "loop_count": 3
+        "title": "반복 (3회)",
+        "repeat_count": 3
     },
     "connected_to": ["wait_node"],
     "connected_from": ["start"],
     "parameters": {
-        "loop_count": 3
+        "repeat_count": 3
     },
     "description": "반복 횟수: 3회"
 }
@@ -689,21 +677,19 @@ description: "반복 횟수: 3회"
 ### 9.4 프론트엔드 NodeManager 객체
 ```javascript
 {
-    id: "loop_start",
-    title: "반복 시작 (3회)",
-    type: "loop",
+    id: "repeat_node",
+    title: "반복 (3회)",
+    type: "repeat",
     x: 300.0,
     y: 0.0,
-    action_node_type: "loop-start",
-    loop_count: 3,
+    repeat_count: 3,
     description: "반복 횟수: 3회"
 }
 
-// nodeManager.nodeData["loop_start"]
+// nodeManager.nodeData["repeat_node"]
 {
-    type: "loop",
-    action_node_type: "loop-start",
-    loop_count: 3,
+    type: "repeat",
+    repeat_count: 3,
     description: "반복 횟수: 3회"
 }
 ```
@@ -714,12 +700,7 @@ description: "반복 횟수: 3회"
 
 ### 10.1 파라미터 저장 위치
 - **node_data**: UI 표시용 데이터 (title, action_node_type 등)
-- **parameters**: 실행에 필요한 핵심 파라미터만 (loop_count, wait_time 등)
-
-### 10.2 상세 노드 타입 (detail_types)
-- `action_node_type` 필드에 저장 (예: "loop-start", "loop-end")
-- `node_data.action_node_type`에 포함
-- 프론트엔드에서 `nodeData.action_node_type`으로 접근
+- **parameters**: 실행에 필요한 핵심 파라미터만 (repeat_count, wait_time 등)
 
 ### 10.3 JSON 필드 파싱
 - DB의 `node_data`, `parameters`, `connected_to`, `connected_from`는 모두 JSON 문자열
@@ -729,7 +710,7 @@ description: "반복 횟수: 3회"
 ### 10.4 노드 스크립트 로드
 - 서버의 `script` 필드에 정의된 파일명으로 동적 로드
 - 경로: `/static/js/components/node/{script}`
-- 예: `node-loop.js` → `/static/js/components/node/node-loop.js`
+- 예: `node-repeat.js` → `/static/js/components/node/node-repeat.js`
 
 ---
 

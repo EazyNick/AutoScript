@@ -158,115 +158,7 @@ export class AddNodeModal {
                     tempDiv
                 );
 
-                // 파라미터 기반 폼 생성
-                let parameterFormHtml = '';
-
-                // 상세 노드 타입이 선택된 경우, 상세 노드 타입의 파라미터 우선 사용
-                let parametersToUse = null;
-                if (
-                    currentDetailNodeType &&
-                    config &&
-                    config.detailTypes &&
-                    config.detailTypes[currentDetailNodeType]
-                ) {
-                    const detailConfig = config.detailTypes[currentDetailNodeType];
-                    if (detailConfig.parameters) {
-                        parametersToUse = detailConfig.parameters;
-                    }
-                }
-
-                // 상세 노드 타입에 파라미터가 없으면 노드 레벨 파라미터 사용
-                if (!parametersToUse && config && config.parameters) {
-                    parametersToUse = config.parameters;
-                }
-
-                let parameterFormResult = { html: '', buttons: [] };
-                if (parametersToUse) {
-                    // excel-close 노드의 execution_id 기본값 설정
-                    const defaultValues = {};
-                    if (selectedType === 'excel-close' && parametersToUse.execution_id) {
-                        // 이전 노드가 있는지 확인하고 기본값 설정
-                        const nodeManager = this.workflowPage.getNodeManager();
-                        if (nodeManager) {
-                            const allNodes = nodeManager.getAllNodes();
-                            // 마지막 노드가 엑셀 열기 노드인지 확인
-                            if (allNodes.length > 0) {
-                                const lastNode = allNodes[allNodes.length - 1];
-                                const lastNodeData = nodeManager.nodeData?.[lastNode.id];
-                                if (lastNodeData?.type === 'excel-open') {
-                                    defaultValues.execution_id = 'output.data.execution_id';
-                                } else {
-                                    // 이전 노드가 없거나 엑셀 열기 노드가 아니어도 기본값 설정
-                                    defaultValues.execution_id = 'output.data.execution_id';
-                                }
-                            } else {
-                                // 노드가 없어도 기본값 설정
-                                defaultValues.execution_id = 'output.data.execution_id';
-                            }
-                        } else {
-                            // nodeManager가 없어도 기본값 설정
-                            defaultValues.execution_id = 'output.data.execution_id';
-                        }
-                    }
-                    parameterFormResult = generateParameterForm(parametersToUse, 'node-', defaultValues, {});
-                    parameterFormHtml = parameterFormResult.html;
-                    console.log('[AddNodeModal] 파라미터 폼 생성:', {
-                        nodeType: selectedType,
-                        parametersToUse: Object.keys(parametersToUse),
-                        formHtmlLength: parameterFormHtml.length,
-                        buttons: parameterFormResult.buttons
-                    });
-                } else {
-                    console.log('[AddNodeModal] 파라미터 없음:', {
-                        nodeType: selectedType,
-                        hasConfig: !!config,
-                        hasParameters: !!config?.parameters,
-                        hasDetailTypes: !!config?.detailTypes,
-                        currentDetailNodeType
-                    });
-                }
-
-                // 파라미터 폼이 있으면 무조건 표시 (최우선)
-                if (parameterFormHtml) {
-                    customSettings.innerHTML = detailNodeTypeSettings + parameterFormHtml;
-                    customSettings.style.display = 'block';
-
-                    // 파일/폴더 선택 버튼 이벤트 리스너 설정
-                    if (parameterFormResult.buttons && parameterFormResult.buttons.length > 0) {
-                        // DOM이 업데이트된 후에 버튼을 찾아야 하므로 약간의 지연
-                        setTimeout(() => {
-                            parameterFormResult.buttons.forEach(({ buttonId, fieldId, type }) => {
-                                const btn = document.getElementById(buttonId);
-                                if (btn) {
-                                    console.log(
-                                        '[AddNodeModal] 버튼 찾음:',
-                                        buttonId,
-                                        'fieldId:',
-                                        fieldId,
-                                        'type:',
-                                        type
-                                    );
-                                    // 기존 이벤트 리스너 제거 후 새로 추가
-                                    const newBtn = btn.cloneNode(true);
-                                    btn.parentNode.replaceChild(newBtn, btn);
-                                    newBtn.addEventListener('click', () => {
-                                        console.log('[AddNodeModal] 버튼 클릭:', buttonId, 'type:', type);
-                                        if (type === 'folder') {
-                                            this.handleFolderSelection(fieldId);
-                                        } else {
-                                            this.handleFileSelection(fieldId);
-                                        }
-                                    });
-                                } else {
-                                    console.warn('[AddNodeModal] 버튼을 찾을 수 없음:', buttonId);
-                                }
-                            });
-                        }, 50); // 지연 시간 증가
-                    }
-                    return; // 파라미터 폼이 있으면 여기서 종료
-                }
-
-                // 파라미터 폼이 없을 때만 특수 노드 처리
+                // process-focus 노드의 경우 파라미터 폼을 생성하지 않고 프로세스 선택 UI만 표시
                 if (selectedType === 'process-focus') {
                     // 프로세스 포커스 노드: 프로세스 선택 UI
                     const processFocusHtml = `
@@ -325,6 +217,115 @@ export class AddNodeModal {
                             }
                         });
                     }
+                    return; // process-focus 노드는 여기서 종료
+                }
+
+                // 파라미터 기반 폼 생성
+                let parameterFormHtml = '';
+
+                // 상세 노드 타입이 선택된 경우, 상세 노드 타입의 파라미터 우선 사용
+                let parametersToUse = null;
+                if (
+                    currentDetailNodeType &&
+                    config &&
+                    config.detailTypes &&
+                    config.detailTypes[currentDetailNodeType]
+                ) {
+                    const detailConfig = config.detailTypes[currentDetailNodeType];
+                    if (detailConfig.parameters) {
+                        parametersToUse = detailConfig.parameters;
+                    }
+                }
+
+                // 상세 노드 타입에 파라미터가 없으면 노드 레벨 파라미터 사용
+                if (!parametersToUse && config && config.parameters) {
+                    parametersToUse = config.parameters;
+                }
+
+                let parameterFormResult = { html: '', buttons: [] };
+                if (parametersToUse) {
+                    // excel-close 노드의 execution_id 기본값 설정
+                    const defaultValues = {};
+                    if (selectedType === 'excel-close' && parametersToUse.execution_id) {
+                        // 이전 노드가 있는지 확인하고 기본값 설정
+                        const nodeManager = this.workflowPage.getNodeManager();
+                        if (nodeManager) {
+                            const allNodes = nodeManager.getAllNodes();
+                            // 마지막 노드가 엑셀 열기 노드인지 확인
+                            if (allNodes.length > 0) {
+                                const lastNode = allNodes[allNodes.length - 1];
+                                const lastNodeData = nodeManager.nodeData?.[lastNode.id];
+                                if (lastNodeData?.type === 'excel-open') {
+                                    defaultValues.execution_id = 'outdata.output.execution_id';
+                                } else {
+                                    // 이전 노드가 없거나 엑셀 열기 노드가 아니어도 기본값 설정
+                                    defaultValues.execution_id = 'outdata.output.execution_id';
+                                }
+                            } else {
+                                // 노드가 없어도 기본값 설정
+                                defaultValues.execution_id = 'outdata.output.execution_id';
+                            }
+                        } else {
+                            // nodeManager가 없어도 기본값 설정
+                            defaultValues.execution_id = 'outdata.output.execution_id';
+                        }
+                    }
+                    parameterFormResult = generateParameterForm(parametersToUse, 'node-', defaultValues, {});
+                    parameterFormHtml = parameterFormResult.html;
+                    console.log('[AddNodeModal] 파라미터 폼 생성:', {
+                        nodeType: selectedType,
+                        parametersToUse: Object.keys(parametersToUse),
+                        formHtmlLength: parameterFormHtml.length,
+                        buttons: parameterFormResult.buttons
+                    });
+                } else {
+                    console.log('[AddNodeModal] 파라미터 없음:', {
+                        nodeType: selectedType,
+                        hasConfig: !!config,
+                        hasParameters: !!config?.parameters,
+                        hasDetailTypes: !!config?.detailTypes,
+                        currentDetailNodeType
+                    });
+                }
+
+                // 파라미터 폼이 있으면 무조건 표시 (최우선)
+                if (parameterFormHtml) {
+                    customSettings.innerHTML = detailNodeTypeSettings + parameterFormHtml;
+                    customSettings.style.display = 'block';
+
+                    // 파일/폴더 선택 버튼 이벤트 리스너 설정
+                    if (parameterFormResult.buttons && parameterFormResult.buttons.length > 0) {
+                        // DOM이 업데이트된 후에 버튼을 찾아야 하므로 약간의 지연
+                        setTimeout(() => {
+                            parameterFormResult.buttons.forEach(({ buttonId, fieldId, type }) => {
+                                const btn = document.getElementById(buttonId);
+                                if (btn) {
+                                    console.log(
+                                        '[AddNodeModal] 버튼 찾음:',
+                                        buttonId,
+                                        'fieldId:',
+                                        fieldId,
+                                        'type:',
+                                        type
+                                    );
+                                    // 기존 이벤트 리스너 제거 후 새로 추가
+                                    const newBtn = btn.cloneNode(true);
+                                    btn.parentNode.replaceChild(newBtn, btn);
+                                    newBtn.addEventListener('click', () => {
+                                        console.log('[AddNodeModal] 버튼 클릭:', buttonId, 'type:', type);
+                                        if (type === 'folder') {
+                                            this.handleFolderSelection(fieldId);
+                                        } else {
+                                            this.handleFileSelection(fieldId);
+                                        }
+                                    });
+                                } else {
+                                    console.warn('[AddNodeModal] 버튼을 찾을 수 없음:', buttonId);
+                                }
+                            });
+                        }, 50); // 지연 시간 증가
+                    }
+                    return; // 파라미터 폼이 있으면 여기서 종료
                 } else {
                     // 파라미터 폼도 없고 특수 노드도 아닌 경우
                     if (detailNodeTypeSettings) {
@@ -600,8 +601,27 @@ export class AddNodeModal {
         const detailNodeTypeSelect = document.getElementById('detail-node-type');
         const detailNodeType = detailNodeTypeSelect ? detailNodeTypeSelect.value : '';
 
+        // 경계 노드인지 확인하여 ID 생성
+        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+        const isBoundary = isBoundaryNodeSync(nodeType);
+
+        // 노드 ID 생성: 타입과 타임스탬프를 포함하여 더 명확하게 식별 가능하도록
+        let nodeId;
+        if (isBoundary) {
+            if (nodeType === 'start') {
+                nodeId = 'start';
+            } else {
+                // 경계 노드: 타입_타임스탬프 형식
+                nodeId = `${nodeType}_${Date.now()}`;
+            }
+        } else {
+            // 일반 노드: 타입_타임스탬프 형식으로 생성하여 타입을 바로 알 수 있도록
+            const shortType = nodeType.replace(/-/g, '_'); // 하이픈을 언더스코어로 변환
+            nodeId = `${shortType}_${Date.now()}`;
+        }
+
         const nodeData = {
-            id: nodeType === NODE_TYPES.START ? 'start' : `node_${Date.now()}`,
+            id: nodeId,
             type: nodeType,
             title: nodeTitle,
             description: nodeDescription,
@@ -720,12 +740,12 @@ export class AddNodeModal {
                         const firstKey = outputKeys[0];
                         const firstValue = previousOutput.output[firstKey];
                         // field_path에 "output.{key}" 형식으로 설정
-                        fieldPath = `output.${firstKey}`;
+                        fieldPath = `outdata.output.${firstKey}`;
                         // compare_value에 첫 번째 값 설정 (객체/배열이면 JSON 문자열로, 아니면 그대로)
                         compareValue = typeof firstValue === 'object' ? JSON.stringify(firstValue) : String(firstValue);
                     } else {
-                        // output이 비어있으면 field_path만 "output"으로 설정
-                        fieldPath = 'output';
+                        // output이 비어있으면 field_path만 "outdata.output"으로 설정
+                        fieldPath = 'outdata.output';
                         compareValue = JSON.stringify(previousOutput);
                     }
                 } else {

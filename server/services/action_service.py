@@ -32,7 +32,21 @@ logger = log_manager.logger
 class ActionService:
     """액션을 처리하는 서비스 클래스"""
 
+    _instance: "ActionService | None" = None
+
+    def __new__(cls) -> "ActionService":
+        """싱글톤 패턴: 인스턴스가 이미 있으면 기존 인스턴스 반환"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self) -> None:
+        # 싱글톤 패턴: 이미 초기화되었으면 다시 초기화하지 않음
+        if hasattr(self, "_initialized"):
+            return
+
+        # 초기화 플래그 설정
+        self._initialized = True
         # 노드 타입별 핸들러 매핑 (자동으로 등록됨)
         # key: 노드 타입 (예: "click", "wait", "condition"), value: execute 메서드
         self.node_handlers: dict[str, Any] = {}
@@ -223,9 +237,17 @@ class ActionService:
             if node_name:
                 node_data["_node_name"] = node_name
 
-            logger.info(f"[process_node] 노드 타입: {node_type}")
-            logger.info(f"[process_node] 노드 데이터: {node_data}")
-            logger.info(f"[process_node] 노드 데이터 키 목록: {list(node_data.keys()) if node_data else []}")
+            # 노드 식별자 포맷팅
+            node_identifier_parts = []
+            if node_name:
+                node_identifier_parts.append(node_name)
+            node_identifier_parts.append(f"({node_type})")
+            if node_id and node_id != "start":
+                node_identifier_parts.append(f"ID:{node_id}")
+            node_identifier = " ".join(node_identifier_parts) if node_identifier_parts else f"{node_type}(ID:{node_id})"
+
+            logger.info(f"[process_node] 노드 실행: {node_identifier}")
+            logger.debug(f"[process_node] 노드 데이터 키 목록: {list(node_data.keys()) if node_data else []}")
 
             # folder_path 파라미터 확인 (image-touch 노드용)
             # image-touch 노드는 이미지 폴더 경로가 필요함
@@ -247,39 +269,69 @@ class ActionService:
                 if node_type == "condition":
                     node_data = ConditionService.prepare_condition_node_data(node_data, context)
 
-                # 엑셀 닫기 노드인 경우 이전 노드의 출력에서 execution_id 가져오기
-                # excel-close 노드는 excel-open 노드에서 생성한 엑셀 객체를 닫기 위해 execution_id가 필요함
-                if node_type == "excel-close":
-                    # 이전 노드의 결과 가져오기
+                # 모든 노드의 파라미터에서 경로 문자열을 실제 값으로 자동 해석
+                # 이전 노드 결과가 있으면 모든 파라미터 값이 "output."으로 시작하는 경로 문자열인지 확인하고
+                # 실제 값으로 변환합니다. 이렇게 하면 엑셀 노드뿐만 아니라 모든 노드에서
+                # 이전 노드 출력 값을 자동으로 사용할 수 있습니다.
+                if context:
                     prev_result = context.get_previous_node_result()
-                    # 이전 노드 결과가 있고 dict 타입이면 처리
                     if prev_result and isinstance(prev_result, dict):
-                        # 이전 노드의 출력 가져오기
-                        prev_output = prev_result.get("output")
-                        # 출력이 dict이고 execution_id가 있으면 가져오기
-                        if isinstance(prev_output, dict) and "execution_id" in prev_output:
-                            # 이전 노드의 출력에서 execution_id를 가져와서 node_data에 추가
-                            node_data["_execution_id_from_prev"] = prev_output.get("execution_id")
-                            logger.info(
-                                f"[process_node][excel-close] 이전 노드 출력에서 execution_id 가져옴: {prev_output.get('execution_id')}"
-                            )
+                        # 이전 노드 결과는 {action, status, output} 형식
+                        # 경로 해석을 위해 outdata 구조로 래핑 (경로 해석용, 실제 결과는 그대로)
+                        prev_result_wrapped = {"outdata": prev_result}
+
+                        # 이전 노드의 입력 파라미터를 indata로 준비 (이전 노드의 node_data에서 가져옴)
+                        # 현재는 이전 노드의 입력 데이터를 직접 가져올 수 없으므로,
+                        # 경로 해석 시 indata는 현재 노드의 입력 데이터를 사용
+                        current_indata = {
+                            k: v
+                            for k, v in node_data.items()
+                            if k not in ("_execution_id", "_script_id", "_node_id", "_node_name", "output_override")
+                            and not k.startswith("_")
+                        }
+
+                        # 범용 필드 경로 해석 유틸리티 사용
+                        from utils.field_path_resolver import resolve_parameter_paths
+
+                        # node_data의 모든 파라미터에서 경로 문자열 해석
+                        # outdata: 이전 노드의 실행 결과
+                        # indata: 현재 노드의 입력 파라미터 (또는 이전 노드의 입력 파라미터를 참조할 수 있도록)
+                        resolve_parameter_paths(node_data, prev_result_wrapped, current_indata)
+                        logger.debug(f"[process_node] 파라미터 경로 해석 완료 - 노드 타입: {node_type}")
+
+                        # execution_id 파라미터가 비어있고, 이전 노드 출력에 execution_id가 있으면 자동으로 가져오기
+                        # 엑셀 노드 등에서 execution_id가 필수인 경우를 위한 자동 채움
+                        if "execution_id" in node_data:
+                            execution_id_value = node_data.get("execution_id")
+                            if not execution_id_value or execution_id_value == "":
+                                prev_output = prev_result.get("output")
+                                if isinstance(prev_output, dict) and "execution_id" in prev_output:
+                                    node_data["execution_id"] = prev_output.get("execution_id")
+                                    logger.info(
+                                        f"[process_node] execution_id가 비어있어 이전 노드 출력에서 자동으로 가져옴: "
+                                        f"{prev_output.get('execution_id')}"
+                                    )
 
                 logger.debug(f"준비된 노드 데이터: {node_data}")
 
             # 실제 노드 종류 가져오기
             action_node_type = node_data.get("action_node_type")
 
-            # 출력 오버라이드가 있으면 그것을 사용, 없으면 노드 실행
+            # 항상 실제 노드를 실행합니다.
+            # output_override는 UI에서 출력 미리보기를 표시하기 위한 용도이며,
+            # 실제 실행을 건너뛰지 않습니다. 이는 예상치 못한 동작을 방지하고
+            # 실제 노드의 부수 효과(파일 열기, API 호출 등)가 항상 실행되도록 보장합니다.
             output_override = node_data.get("output_override")
             if output_override is not None:
-                # 출력 오버라이드가 있으면 그것을 결과로 사용
-                result = {"action": node_type, "status": "completed", "output": output_override}
-                logger.debug(f"출력 오버라이드 사용: {output_override}")
-            else:
-                # 액션 실행 (입력이 없어도 처리)
-                node_type_str = str(node_type) if node_type else "unknown"
-                result = await self.process_action(node_type_str, node_data, action_node_type)
-                logger.debug(f"process_action 결과: {result}")
+                logger.info(
+                    "[process_node] output_override가 설정되어 있지만 실제 노드를 실행합니다. "
+                    "(output_override는 UI 미리보기용이며 실행을 건너뛰지 않습니다)"
+                )
+
+            # 액션 실행 (항상 실제 실행)
+            node_type_str = str(node_type) if node_type else "unknown"
+            result = await self.process_action(node_type_str, node_data, action_node_type)
+            logger.debug(f"process_action 결과: {result}")
 
             # 결과가 None이면 기본값으로 변환
             if result is None:
@@ -293,7 +345,16 @@ class ActionService:
             if "output" not in result:
                 result["output"] = None
 
-            # 컨텍스트에 항상 결과 저장 (None이어도)
+            # 메타데이터를 결과에 추가
+            if execution_id is not None:
+                result["_execution_id"] = execution_id
+            if script_id is not None:
+                result["_script_id"] = script_id
+            result["_node_id"] = node_id
+            if node_name:
+                result["_node_name"] = node_name
+
+            # 컨텍스트에 항상 결과 저장
             if context:
                 context.add_node_result(node_id, node_name, result)
 

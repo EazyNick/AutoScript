@@ -145,7 +145,7 @@ def initialize_database() -> None:
         raise e
 
 
-app = FastAPI(title="자동화 도구", description="자동화를 위한 API 서버", version="1.0.0")
+app = FastAPI(title="AutoScript", description="API 서버", version="1.0.0")
 
 
 # 서버 시작 시 데이터베이스 초기화
@@ -240,7 +240,7 @@ async def root() -> Response:
             html_content = f.read()
         html_content = inject_env_to_html(html_content)
         return HTMLResponse(content=html_content)
-    return JSONResponse(content={"message": "자동화 API 서버가 실행 중입니다."})
+    return JSONResponse(content={"message": "API 서버가 실행 중입니다."})
 
 
 @app.get("/health")

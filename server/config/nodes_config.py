@@ -14,7 +14,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "시작 노드",
         "title": "시작",
         "description": "워크플로우의 시작점입니다.",
-        "script": "node-start.js",
+        "script": "boundarynodes/node-start.js",
         "is_boundary": True,
         "category": "system",
         "input_schema": {},
@@ -36,7 +36,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "이미지 터치 노드",
         "title": "이미지 터치",
         "description": "이미지를 찾아 터치하는 노드입니다.",
-        "script": "node-image-touch.js",
+        "script": "imagenodes/node-image-touch.js",
         "is_boundary": False,
         "category": "action",
         "requires_folder_path": True,
@@ -98,7 +98,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "대기 노드",
         "title": "대기 노드",
         "description": "일정 시간 대기하는 노드입니다.",
-        "script": "node-wait.js",
+        "script": "waitnodes/node-wait.js",
         "is_boundary": False,
         "category": "action",
         # 노드 레벨 파라미터
@@ -137,11 +137,37 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "화면 포커스",
         "title": "화면 포커스",
         "description": "선택한 프로세스의 창을 화면 최상단에 포커스합니다.",
-        "script": "node-process-focus.js",
+        "script": "processnodes/node-process-focus.js",
         "is_boundary": False,
-        "category": "action",
+        "category": "process",
         # 상세 노드 타입 정의
         "detail_types": {},
+        "parameters": {
+            "process_id": {
+                "type": "number",
+                "description": "프로세스 ID",
+                "required": False,
+                "default": None,
+            },
+            "hwnd": {
+                "type": "number",
+                "description": "창 핸들 (Window Handle)",
+                "required": False,
+                "default": None,
+            },
+            "process_name": {
+                "type": "string",
+                "description": "프로세스 이름",
+                "required": False,
+                "default": None,
+            },
+            "window_title": {
+                "type": "string",
+                "description": "창 제목",
+                "required": False,
+                "default": None,
+            },
+        },
         "input_schema": {
             "action": {"type": "string", "description": "이전 노드 타입"},
             "status": {"type": "string", "description": "이전 노드 실행 상태"},
@@ -154,10 +180,11 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
                 "type": "object",
                 "description": "출력 데이터",
                 "properties": {
+                    "success": {"type": "boolean", "description": "포커스 성공 여부"},
                     "process_id": {"type": "number", "description": "프로세스 ID"},
                     "process_name": {"type": "string", "description": "프로세스 이름"},
                     "hwnd": {"type": "number", "description": "윈도우 핸들"},
-                    "focused": {"type": "boolean", "description": "포커스 성공 여부"},
+                    "window_title": {"type": "string", "description": "창 제목"},
                 },
             },
         },
@@ -167,7 +194,7 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         "label": "조건 노드",
         "title": "조건 노드",
         "description": "이전 노드의 출력을 받아서 조건을 평가하는 노드입니다.",
-        "script": "node-condition.js",
+        "script": "conditionnodes/node-condition.js",
         "is_boundary": False,
         "category": "logic",
         # 노드 레벨 파라미터
@@ -228,76 +255,11 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
             },
         },
     },
-    "loop": {
-        "label": "반복 노드",
-        "title": "반복 노드",
-        "description": "노드 블록을 반복 실행하는 노드입니다.",
-        "script": "node-loop.js",
-        "is_boundary": False,
-        "category": "logic",
-        "input_schema": {
-            "action": {"type": "string", "description": "이전 노드 타입"},
-            "status": {"type": "string", "description": "이전 노드 실행 상태"},
-            "output": {"type": "any", "description": "이전 노드 출력 데이터"},
-        },
-        "output_schema": {
-            "action": {"type": "string", "description": "노드 타입"},
-            "status": {"type": "string", "description": "실행 상태"},
-            "output": {
-                "type": "object",
-                "description": "출력 데이터",
-                "properties": {
-                    "loop_count": {"type": "number", "description": "실행된 반복 횟수"},
-                    "completed": {"type": "boolean", "description": "반복 완료 여부"},
-                    "iterations": {
-                        "type": "array",
-                        "description": "각 반복의 실행 결과",
-                        "items": {"type": "object"},
-                    },
-                },
-            },
-        },
-        # 상세 노드 타입 정의
-        "detail_types": {
-            "loop-start": {
-                "label": "반복 시작",
-                "description": "반복 블록의 시작점입니다. 반복 종료 노드까지의 노드들을 반복 실행합니다.",
-                "icon": "▶",
-                "parameters": {
-                    "loop_count": {
-                        "type": "number",
-                        "label": "반복 횟수",
-                        "description": "반복할 횟수를 설정합니다.",
-                        "default": 1,
-                        "min": 1,
-                        "max": 10000,
-                        "required": True,
-                    }
-                },
-            },
-            "loop-end": {
-                "label": "반복 종료",
-                "description": "반복 블록의 종료점입니다. 반복 시작 노드로 돌아가 반복을 계속합니다.",
-                "icon": "■",
-                "parameters": {
-                    "loop_count": {
-                        "type": "number",
-                        "label": "반복 횟수",
-                        "description": "반복할 횟수를 설정합니다. (반복 시작 노드와 동일한 값)",
-                        "default": 1,
-                        "min": 1,
-                        "max": 10000,
-                        "required": True,
-                    }
-                },
-            },
-        },
-    },
     "repeat": {
         "label": "반복 노드",
         "title": "반복",
         "description": "아래에 연결된 노드들을 지정한 횟수만큼 반복 실행하는 노드입니다.",
-        "script": "node-repeat.js",
+        "script": "logicnodes/node-repeat.js",
         "is_boundary": False,
         "category": "logic",
         "has_bottom_output": True,  # 아래 연결점이 있음을 표시
@@ -338,128 +300,12 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
             },
         },
     },
-    # === 예시 노드: 파일 읽기 ===
-    "file-read": {
-        "label": "파일 읽기 노드",
-        "title": "파일 읽기",
-        "description": "파일의 내용을 읽어오는 노드입니다.",
-        "script": "node-file-read.js",
-        "is_boundary": False,
-        "category": "action",
-        # 노드 레벨 파라미터
-        "parameters": {
-            "file_path": {
-                "type": "string",
-                "label": "파일 경로",
-                "description": "읽을 파일의 경로를 입력하세요.",
-                "default": "",
-                "required": True,
-                "placeholder": "예: C:\\data\\file.txt",
-            },
-            "encoding": {
-                "type": "string",
-                "label": "인코딩",
-                "description": "파일 인코딩을 선택하세요.",
-                "default": "utf-8",
-                "required": False,
-                "options": ["utf-8", "utf-16", "ascii", "latin-1"],
-            },
-        },
-        # 상세 노드 타입 정의
-        "detail_types": {},
-        "input_schema": {
-            "action": {"type": "string", "description": "이전 노드 타입"},
-            "status": {"type": "string", "description": "이전 노드 실행 상태"},
-            "output": {"type": "any", "description": "이전 노드 출력 데이터"},
-        },
-        "output_schema": {
-            "action": {"type": "string", "description": "노드 타입"},
-            "status": {"type": "string", "description": "실행 상태"},
-            "output": {
-                "type": "object",
-                "description": "출력 데이터",
-                "properties": {
-                    "file_path": {"type": "string", "description": "파일 경로"},
-                    "encoding": {"type": "string", "description": "인코딩"},
-                    "content": {"type": "string", "description": "파일 내용"},
-                    "size": {"type": "number", "description": "파일 크기 (바이트)"},
-                },
-            },
-        },
-    },
-    # === 예시 노드: 파일 쓰기 ===
-    "file-write": {
-        "label": "파일 쓰기 노드",
-        "title": "파일 쓰기",
-        "description": "파일에 내용을 작성하는 노드입니다.",
-        "script": "node-file-write.js",
-        "is_boundary": False,
-        "category": "action",
-        # 노드 레벨 파라미터
-        "parameters": {
-            "file_path": {
-                "type": "string",
-                "label": "파일 경로",
-                "description": "작성할 파일의 경로를 입력하세요.",
-                "default": "",
-                "required": True,
-                "placeholder": "예: C:\\data\\output.txt",
-            },
-            "content": {
-                "type": "string",
-                "label": "내용",
-                "description": "파일에 작성할 내용을 입력하세요.",
-                "default": "",
-                "required": True,
-                "placeholder": "작성할 내용을 입력하세요",
-            },
-            "mode": {
-                "type": "string",
-                "label": "작성 모드",
-                "description": "파일 작성 모드를 선택하세요.",
-                "default": "write",
-                "required": False,
-                "options": ["write", "append"],
-            },
-            "encoding": {
-                "type": "string",
-                "label": "인코딩",
-                "description": "파일 인코딩을 선택하세요.",
-                "default": "utf-8",
-                "required": False,
-                "options": ["utf-8", "utf-16", "ascii", "latin-1"],
-            },
-        },
-        # 상세 노드 타입 정의
-        "detail_types": {},
-        "input_schema": {
-            "action": {"type": "string", "description": "이전 노드 타입"},
-            "status": {"type": "string", "description": "이전 노드 실행 상태"},
-            "output": {"type": "any", "description": "이전 노드 출력 데이터"},
-        },
-        "output_schema": {
-            "action": {"type": "string", "description": "노드 타입"},
-            "status": {"type": "string", "description": "실행 상태"},
-            "output": {
-                "type": "object",
-                "description": "출력 데이터",
-                "properties": {
-                    "file_path": {"type": "string", "description": "파일 경로"},
-                    "content": {"type": "string", "description": "작성한 내용"},
-                    "mode": {"type": "string", "description": "작성 모드"},
-                    "encoding": {"type": "string", "description": "인코딩"},
-                    "written": {"type": "boolean", "description": "작성 성공 여부"},
-                    "bytes_written": {"type": "number", "description": "작성된 바이트 수"},
-                },
-            },
-        },
-    },
     # === 엑셀 노드 (Excel Nodes) ===
     "excel-open": {
         "label": "엑셀 열기 노드",
         "title": "엑셀 열기",
         "description": "win32를 사용하여 엑셀 파일을 열는 노드입니다. Windows 환경에서만 사용 가능합니다.",
-        "script": "node-excel-open.js",
+        "script": "excelnodes/node-excel-open.js",
         "is_boundary": False,
         "category": "action",
         "parameters": {
@@ -499,11 +345,11 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
             },
         },
     },
-    "excel-close": {
-        "label": "엑셀 닫기 노드",
-        "title": "엑셀 닫기",
-        "description": "엑셀 열기 노드로 열린 엑셀 파일을 닫는 노드입니다. Windows 환경에서만 사용 가능합니다.",
-        "script": "node-excel-close.js",
+    "excel-select-sheet": {
+        "label": "엑셀 시트 선택 노드",
+        "title": "엑셀 시트 선택",
+        "description": "엑셀 열기 노드로 열린 워크북의 특정 시트를 선택하는 노드입니다. Windows 환경에서만 사용 가능합니다.",
+        "script": "excelnodes/node-excel-select-sheet.js",
         "is_boundary": False,
         "category": "action",
         "parameters": {
@@ -511,7 +357,63 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
                 "type": "string",
                 "label": "엑셀 실행 ID",
                 "description": "엑셀 열기 노드의 출력에서 execution_id를 선택하거나 직접 입력하세요.",
-                "default": "output.data.execution_id",
+                "default": "outdata.output.execution_id",
+                "required": True,
+                "placeholder": "이전 노드 출력에서 선택하거나 직접 입력",
+                "source": "previous_output",
+            },
+            "sheet_name": {
+                "type": "string",
+                "label": "시트 이름",
+                "description": "선택할 시트의 이름을 입력하세요. 시트 인덱스와 둘 중 하나는 필수입니다.",
+                "default": "",
+                "required": False,
+                "placeholder": "예: Sheet1",
+            },
+            "sheet_index": {
+                "type": "number",
+                "label": "시트 인덱스",
+                "description": "선택할 시트의 인덱스를 입력하세요 (1부터 시작). 시트 이름과 둘 중 하나는 필수입니다.",
+                "default": None,
+                "required": False,
+                "placeholder": "예: 1",
+                "min": 1,
+            },
+        },
+        "input_schema": {
+            "action": {"type": "string", "description": "이전 노드 타입"},
+            "status": {"type": "string", "description": "이전 노드 실행 상태"},
+            "output": {"type": "any", "description": "이전 노드 출력 데이터"},
+        },
+        "output_schema": {
+            "action": {"type": "string", "description": "노드 타입"},
+            "status": {"type": "string", "description": "실행 상태 (completed/failed)"},
+            "output": {
+                "type": "object",
+                "description": "출력 데이터",
+                "properties": {
+                    "success": {"type": "boolean", "description": "성공 여부"},
+                    "execution_id": {"type": "string", "description": "엑셀 실행 ID"},
+                    "sheet_name": {"type": "string", "description": "선택된 시트 이름"},
+                    "sheet_index": {"type": "number", "description": "선택된 시트 인덱스 (없으면 null)"},
+                    "selected_by": {"type": "string", "description": "선택 방식 (name 또는 index)"},
+                },
+            },
+        },
+    },
+    "excel-close": {
+        "label": "엑셀 닫기 노드",
+        "title": "엑셀 닫기",
+        "description": "엑셀 열기 노드로 열린 엑셀 파일을 닫는 노드입니다. Windows 환경에서만 사용 가능합니다.",
+        "script": "excelnodes/node-excel-close.js",
+        "is_boundary": False,
+        "category": "action",
+        "parameters": {
+            "execution_id": {
+                "type": "string",
+                "label": "엑셀 실행 ID",
+                "description": "엑셀 열기 노드의 출력에서 execution_id를 선택하거나 직접 입력하세요.",
+                "default": "outdata.output.execution_id",
                 "required": False,
                 "placeholder": "이전 노드 출력에서 선택하거나 직접 입력",
                 "source": "previous_output",  # 이전 노드 출력에서 선택 가능하도록 표시

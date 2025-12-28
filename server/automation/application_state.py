@@ -13,28 +13,11 @@ class ApplicationState:
     def __init__(self) -> None:
         self.state = {
             "is_running": False,
-            "current_scene": "unknown",
-            "player_level": 1,
-            "player_hp": 100,
-            "player_mp": 100,
-            "inventory_count": 0,
-            "gold": 0,
-            "experience": 0,
-            "current_map": "unknown",
-            "coordinates": {"x": 0, "y": 0},
             "last_action": None,
             "last_action_time": None,
             "session_start_time": time.time(),
             "actions_performed": 0,
             "errors_count": 0,
-        }
-
-        self.scene_templates = {
-            "main_menu": "templates/main_menu.png",
-            "character_select": "templates/character_select.png",
-            "application_world": "templates/application_world.png",
-            "inventory": "templates/inventory.png",
-            "shop": "templates/shop.png",
         }
 
     def update_state(self, key: str, value: Any) -> None:
@@ -47,77 +30,6 @@ class ApplicationState:
         if key:
             return self.state.get(key)
         return self.state.copy()
-
-    def set_scene(self, scene: str) -> None:
-        """현재 씬을 설정합니다."""
-        self.update_state("current_scene", scene)
-
-    def get_scene(self) -> str:
-        """현재 씬을 반환합니다."""
-        scene: Any = self.state.get("current_scene", "unknown")
-        return str(scene)
-
-    def set_player_stats(self, level: int | None = None, hp: int | None = None, mp: int | None = None) -> None:
-        """플레이어 스탯을 설정합니다."""
-        if level is not None:
-            self.update_state("player_level", level)
-        if hp is not None:
-            self.update_state("player_hp", hp)
-        if mp is not None:
-            self.update_state("player_mp", mp)
-
-    def get_player_stats(self) -> dict[str, int]:
-        """플레이어 스탯을 반환합니다."""
-        level: Any = self.state.get("player_level", 1)
-        hp: Any = self.state.get("player_hp", 100)
-        mp: Any = self.state.get("player_mp", 100)
-        return {
-            "level": int(level),
-            "hp": int(hp),
-            "mp": int(mp),
-        }
-
-    def set_inventory(self, count: int) -> None:
-        """인벤토리 아이템 수를 설정합니다."""
-        self.update_state("inventory_count", count)
-
-    def get_inventory_count(self) -> int:
-        """인벤토리 아이템 수를 반환합니다."""
-        count: Any = self.state.get("inventory_count", 0)
-        return int(count)
-
-    def set_currency(self, gold: int | None = None, exp: int | None = None) -> None:
-        """화폐를 설정합니다."""
-        if gold is not None:
-            self.update_state("gold", gold)
-        if exp is not None:
-            self.update_state("experience", exp)
-
-    def get_currency(self) -> dict[str, int]:
-        """화폐를 반환합니다."""
-        gold: Any = self.state.get("gold", 0)
-        exp: Any = self.state.get("experience", 0)
-        return {"gold": int(gold), "experience": int(exp)}
-
-    def set_position(self, x: int, y: int) -> None:
-        """플레이어 위치를 설정합니다."""
-        self.update_state("coordinates", {"x": x, "y": y})
-
-    def get_position(self) -> dict[str, int]:
-        """플레이어 위치를 반환합니다."""
-        coords: Any = self.state.get("coordinates", {"x": 0, "y": 0})
-        if isinstance(coords, dict):
-            return {"x": int(coords.get("x", 0)), "y": int(coords.get("y", 0))}
-        return {"x": 0, "y": 0}
-
-    def set_map(self, map_name: str) -> None:
-        """현재 맵을 설정합니다."""
-        self.update_state("current_map", map_name)
-
-    def get_map(self) -> str:
-        """현재 맵을 반환합니다."""
-        map_name: Any = self.state.get("current_map", "unknown")
-        return str(map_name)
 
     def record_action(self, action: str, success: bool = True) -> None:
         """수행된 액션을 기록합니다."""

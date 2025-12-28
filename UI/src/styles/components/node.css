@@ -38,17 +38,14 @@
     background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); /* 하늘색-청록색 그라데이션 */
 }
 
-/* 이동 노드: 캐릭터 이동 액션 노드 */
 .node.type-move {
     background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); /* 초록색-청록색 그라데이션 */
 }
 
-/* 수집 노드: 아이템 수집 액션 노드 */
 .node.type-collect {
     background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); /* 분홍색-노란색 그라데이션 */
 }
 
-/* 전투 노드: 전투 액션 노드 */
 .node.type-battle {
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); /* 빨간색-주황색 그라데이션 */
 }
