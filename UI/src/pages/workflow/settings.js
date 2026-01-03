@@ -413,10 +413,6 @@ export class SettingsManager {
                             <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Z</kbd></span>
                         </div>
                         <div class="shortcut-item">
-                            <span class="shortcut-label">${t('settings.redo')}</span>
-                            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Y</kbd></span>
-                        </div>
-                        <div class="shortcut-item">
                             <span class="shortcut-label">${t('settings.deleteNode')}</span>
                             <span class="shortcut-keys"><kbd>Delete</kbd></span>
                         </div>

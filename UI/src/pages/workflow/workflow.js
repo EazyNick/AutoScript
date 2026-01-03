@@ -659,9 +659,18 @@ export class WorkflowPage {
                 return false;
             }
 
-            if (e.ctrlKey && e.key === 'n') {
+            // Ctrl+N - 노드 추가 모달 열기 (현재 포커스한 스크립트에서)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
                 e.preventDefault();
-                this.showAddNodeModal();
+                // 현재 스크립트가 선택되어 있는지 확인
+                const sidebarManager = this.getSidebarManager();
+                const currentScript = sidebarManager ? sidebarManager.getCurrentScript() : null;
+                if (currentScript && currentScript.id) {
+                    this.showAddNodeModal();
+                } else {
+                    const logger = this.getLogger();
+                    logger.log('[WorkflowPage] 현재 선택된 스크립트가 없어 노드 추가 모달을 열 수 없습니다.');
+                }
             }
 
             if (e.key === 'F5' && !e.ctrlKey) {
