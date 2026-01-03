@@ -131,6 +131,24 @@ export class NodeDragController {
                 this.nodeManager.selectNode(node);
             }
 
+            // Undo/Redo: 드래그 시작 전 스냅샷 저장
+            // workflowPage를 여러 소스에서 찾기
+            const workflowPage = this.nodeManager.workflowPage || window.workflowPage;
+            const undoRedoService = workflowPage?.getUndoRedoService?.();
+            if (undoRedoService && !undoRedoService.isRestoring) {
+                this.dragStartSnapshot = undoRedoService.createSnapshot('move');
+                if (!this.dragStartSnapshot) {
+                    log('[NodeDragController] 경고: 드래그 시작 스냅샷 생성 실패');
+                } else {
+                    log('[NodeDragController] 드래그 시작 스냅샷 생성 성공');
+                }
+            } else {
+                this.dragStartSnapshot = null;
+                if (!workflowPage) {
+                    log('[NodeDragController] 경고: workflowPage를 찾을 수 없습니다');
+                }
+            }
+
             this.calculateDragOffset(e, node);
             this.setDragState(node, true);
 
@@ -302,6 +320,51 @@ export class NodeDragController {
 
             // 최종 위치 저장 (nodeData에 반영)
             this.saveFinalPosition(node);
+
+            // Undo/Redo: 드래그 종료 후 스냅샷 저장
+            // workflowPage를 여러 소스에서 찾기
+            const workflowPage = this.nodeManager.workflowPage || window.workflowPage;
+            const undoRedoService = workflowPage?.getUndoRedoService?.();
+
+            log(
+                `[NodeDragController] 드래그 종료 처리 시작 - workflowPage: ${!!workflowPage}, undoRedoService: ${!!undoRedoService}, isRestoring: ${undoRedoService?.isRestoring}, dragStartSnapshot: ${!!this.dragStartSnapshot}`
+            );
+
+            if (undoRedoService && !undoRedoService.isRestoring) {
+                // dragStartSnapshot이 없으면 지금 생성 (드래그 시작 시 생성 실패한 경우 대비)
+                if (!this.dragStartSnapshot) {
+                    log('[NodeDragController] 경고: 드래그 시작 스냅샷이 없어서 지금 생성합니다');
+                    this.dragStartSnapshot = undoRedoService.createSnapshot('move');
+                    if (!this.dragStartSnapshot) {
+                        log('[NodeDragController] 오류: 드래그 시작 스냅샷 생성 실패');
+                    }
+                }
+
+                if (this.dragStartSnapshot) {
+                    // DOM 업데이트 완료를 기다린 후 스냅샷 저장
+                    setTimeout(() => {
+                        log('[NodeDragController] 드래그 종료 스냅샷 생성 시작');
+                        const dragEndSnapshot = undoRedoService.createSnapshot('move');
+                        if (dragEndSnapshot) {
+                            log('[NodeDragController] 드래그 종료 스냅샷 생성 성공, 저장 시작');
+                            undoRedoService.saveMoveSnapshot(this.dragStartSnapshot, dragEndSnapshot);
+                            log('[NodeDragController] 드래그 종료 스냅샷 저장 완료');
+                        } else {
+                            log('[NodeDragController] 경고: 드래그 종료 스냅샷 생성 실패');
+                        }
+                        this.dragStartSnapshot = null; // 스냅샷 초기화
+                    }, 100); // 50ms -> 100ms로 증가 (DOM 업데이트 완료 대기)
+                } else {
+                    log('[NodeDragController] 경고: 드래그 시작 스냅샷을 생성할 수 없어 스냅샷 저장 건너뜀');
+                }
+            } else {
+                if (!undoRedoService) {
+                    log('[NodeDragController] 경고: undoRedoService를 찾을 수 없습니다');
+                }
+                if (undoRedoService?.isRestoring) {
+                    log('[NodeDragController] 경고: 복원 중이어서 스냅샷 저장 건너뜀');
+                }
+            }
 
             // CSS 상태 정리 (dragging 클래스 제거)
             this.setDragState(node, false);

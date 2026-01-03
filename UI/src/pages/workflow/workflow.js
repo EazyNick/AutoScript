@@ -21,6 +21,7 @@ import { WorkflowLoadService } from './services/workflow-load-service.js';
 import { WorkflowExecutionService } from './services/workflow-execution-service.js';
 import { NodeUpdateService } from './services/node-update-service.js';
 import { NodeCreationService } from './services/node-creation-service.js';
+import { UndoRedoService } from './services/undo-redo-service.js';
 import { ViewportUtils } from './utils/viewport-utils.js';
 import { StorageUtils } from './utils/storage-utils.js';
 import { getNodeType, getNodeData, escapeHtml } from './utils/node-utils.js';
@@ -75,6 +76,7 @@ export class WorkflowPage {
         this.executionService = null; // 워크플로우 실행 서비스
         this.updateService = null; // 노드 업데이트 서비스
         this.creationService = null; // 노드 생성 서비스
+        this.undoRedoService = null; // Undo/Redo 서비스
 
         // 내부 상태 플래그
         this._initialized = false; // 중복 초기화 방지 플래그
@@ -116,6 +118,12 @@ export class WorkflowPage {
     getSaveService() {
         return this.saveService;
     }
+    getLoadService() {
+        return this.loadService;
+    }
+    getUndoRedoService() {
+        return this.undoRedoService;
+    }
 
     /**
      * 초기화 메서드
@@ -154,6 +162,7 @@ export class WorkflowPage {
         this.executionService = new WorkflowExecutionService(this);
         this.updateService = new NodeUpdateService(this);
         this.creationService = new NodeCreationService(this);
+        this.undoRedoService = new UndoRedoService(this);
 
         this.setupEventListeners();
         this.setupComponentEventListeners();

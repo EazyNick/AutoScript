@@ -101,6 +101,12 @@ export class WorkflowLoadService {
         // 스크립트 ID 저장 (노드 제거 후에 저장)
         this._lastLoadedScriptId = script.id;
 
+        // Undo/Redo 서비스에 스크립트 전환 알림
+        const undoRedoService = this.workflowPage?.getUndoRedoService?.();
+        if (undoRedoService && script.id) {
+            undoRedoService.switchScript(script.id);
+        }
+
         try {
             if (ScriptAPI && script.id) {
                 const response = await ScriptAPI.getScript(script.id);

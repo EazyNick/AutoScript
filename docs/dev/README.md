@@ -39,6 +39,7 @@
 - **[노드 실행 흐름](node-execution-flow.md)** - 노드 실행 프로세스 및 실행 순서
 - **[실행 로그 흐름](execution-log-flow.md)** - 실행 로그 생성 및 저장 프로세스
 - **[노드 출력 표준](node-output-standard.md)** - 노드 출력 데이터 형식 및 표준
+- **[Undo/Redo 시스템](undo-redo-system.md)** - 되돌리기 기능 작동 방식 및 아키텍처
 - **[API 참조](api-reference.md)** - REST API 엔드포인트 및 사용법
 
 ## 향후 계획
