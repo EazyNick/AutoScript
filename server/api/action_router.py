@@ -8,8 +8,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from api.response_helpers import error_response, list_response, success_response
-from api.router_wrapper import api_handler
+from api.helpers import api_handler, error_response, list_response, success_response
+from api.helpers.constants import API_CONSTANTS
 from db.database import db_manager
 from log import log_manager
 from models import (
@@ -452,7 +452,11 @@ async def execute_nodes(request: NodeExecutionRequest) -> ActionResponse:
 
     # 실행 완료 시간 계산 (밀리초 단위)
     # execution_start_time이 있으면 현재 시간과의 차이를 밀리초로 변환
-    execution_time_ms = int((time.time() - execution_start_time) * 1000) if execution_start_time else None
+    execution_time_ms = (
+        int((time.time() - execution_start_time) * API_CONSTANTS.MILLISECONDS_PER_SECOND)
+        if execution_start_time
+        else None
+    )
 
     # 스크립트 실행 기록 업데이트 (완료)
     # script_id와 execution_record_id가 모두 있으면 DB에 실행 결과 업데이트

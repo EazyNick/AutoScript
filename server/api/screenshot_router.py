@@ -10,8 +10,7 @@ import re
 import cv2
 from fastapi import APIRouter, Body, HTTPException, Request
 
-from api.response_helpers import success_response
-from api.router_wrapper import api_handler
+from api.helpers import api_handler, success_response
 from automation.screen_capture import ScreenCapture
 from log import log_manager
 from models.response_models import SuccessResponse

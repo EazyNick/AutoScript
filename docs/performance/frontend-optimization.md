@@ -482,6 +482,26 @@ class NodeManager {
 
 ## 워크플로우 로딩 최적화
 
+### 노드 스크립트 지연 로딩 (2026-01-05 추가)
+
+시작 노드만 필요한 경우 경계 노드(시작/종료)만 먼저 로드하고 나머지는 백그라운드에서 지연 로드합니다.
+
+**구현 위치**: `UI/src/pages/workflow/workflow.js`, `UI/src/pages/workflow/services/node-registry.js`
+
+```javascript
+// 경계 노드만 먼저 로드
+await registry.loadBoundaryNodeScripts();
+
+// 나머지 노드는 백그라운드에서 지연 로드
+registry.loadAllNodeScripts().then(() => {
+    log('[WorkflowPage] 모든 노드 스크립트 로드 완료 (지연 로드)');
+});
+```
+
+**효과**:
+- 최초 실행 시 시작 노드 표시 속도 대폭 개선 (약 5초 → 즉시)
+- 사용자 경험 향상
+
 ### 비동기 노드 생성
 
 노드를 순차적으로 생성하여 UI 블로킹을 방지합니다.
@@ -527,6 +547,34 @@ restoreConnections(connections, nodeManager) {
     });
 }
 ```
+
+## 상수화 및 모듈화 (2026-01-05 추가)
+
+하드코딩된 값들을 상수 파일로 분리하여 유지보수성을 향상시킵니다.
+
+**구현 위치**: `UI/src/pages/workflow/constants/`
+
+```javascript
+// timing-constants.js
+export const TIMING_CONSTANTS = {
+    DEFAULT_DELAY: 50,
+    MEDIUM_DELAY: 100,
+    CONNECTION_UPDATE_INTERVAL: 16,
+    // ...
+};
+
+// size-constants.js
+export const SIZE_CONSTANTS = {
+    INFINITE_CANVAS_WIDTH: 50000,
+    MAGNETIC_THRESHOLD: 40,
+    // ...
+};
+```
+
+**효과**:
+- 수치 변경 시 상수 파일만 수정하면 됨
+- 코드 일관성 향상
+- 가독성 개선
 
 ## 성능 측정 도구
 

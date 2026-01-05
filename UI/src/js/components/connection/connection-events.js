@@ -3,6 +3,7 @@
  * 이벤트 바인딩, 클릭 처리, 마우스 이동 등을 담당
  */
 
+import { SIZE_CONSTANTS } from '../../../pages/workflow/constants/size-constants.js';
 import { getLogger } from './connection-utils.js';
 import { createCurvedPath } from './connection-utils.js';
 
@@ -355,7 +356,7 @@ export class ConnectionEventHandler {
         // - canvas-content에 transform이 적용되어 있고, SVG가 canvas-content 안에 있어서
         //   좌표 변환 시 미세한 오차가 발생하는 것으로 추정됨
         // - 실제 연결선은 두 커넥터 모두 같은 방식(getConnectorPosition)으로 계산하므로 오차가 없음
-        const adjustedMouseX = mouseX - -10; // mouseX + 10과 동일
+        const adjustedMouseX = mouseX + SIZE_CONSTANTS.MOUSE_POSITION_ADJUSTMENT;
 
         logger.log('[ConnectionManager] 임시 연결선 업데이트:', {
             start: startPos,

@@ -69,6 +69,21 @@ export class NodeRegistry {
     }
 
     /**
+     * 경계 노드(시작/종료 노드) 스크립트만 먼저 로드
+     * 성능 최적화: 시작 노드만 필요한 경우 모든 노드를 로드하지 않음
+     * @returns {Promise<void>}
+     */
+    async loadBoundaryNodeScripts() {
+        const configs = await this.getNodeConfigs();
+        const boundaryNodeTypes = Object.keys(configs).filter((nodeType) => {
+            const config = configs[nodeType];
+            return config?.isBoundary === true;
+        });
+        const loadPromises = boundaryNodeTypes.map((nodeType) => this.loadNodeScript(nodeType));
+        await Promise.all(loadPromises);
+    }
+
+    /**
      * 특정 노드 타입의 스크립트 로드
      *
      * 서버에서 정적 파일이 /static 경로로 마운트되어 있으므로,

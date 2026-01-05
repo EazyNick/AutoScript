@@ -3,6 +3,9 @@
  * 노드 위치 변경에 대한 되돌리기 기능을 제공합니다.
  */
 
+import { TIMING_CONSTANTS } from '../constants/timing-constants.js';
+import { UNDO_REDO_CONSTANTS } from '../constants/undo-redo-constants.js';
+
 const log = window.Logger ? window.Logger.log.bind(window.Logger) : console.log;
 const logError = window.Logger ? window.Logger.error.bind(window.Logger) : console.error;
 
@@ -14,7 +17,7 @@ export class UndoRedoService {
         this.workflowPage = workflowPage;
         this.undoStacks = new Map(); // 스크립트별 되돌리기 스택 (scriptId -> stack)
         this.currentScriptId = null; // 현재 스크립트 ID
-        this.maxStackSize = 50; // 최대 스택 크기
+        this.maxStackSize = UNDO_REDO_CONSTANTS.MAX_STACK_SIZE;
         this.isRestoring = false; // 복원 중 플래그 (무한 루프 방지)
         this.isProcessing = false; // Undo 처리 중 플래그 (중복 실행 방지)
 
@@ -90,37 +93,10 @@ export class UndoRedoService {
             return null;
         }
 
-        // 스크립트 ID 가져오기 (여러 소스에서 시도)
-        let scriptId = this.currentScriptId;
+        // 스크립트 ID 가져오기 및 업데이트
+        const scriptId = this._getOrUpdateScriptId();
         if (!scriptId) {
-            // 1. loadService에서 가져오기
-            const loadService = this.workflowPage?.getLoadService?.();
-            if (loadService) {
-                scriptId = loadService.getLastLoadedScriptId();
-            }
-
-            // 2. 여전히 없으면 sidebarManager에서 가져오기
-            if (!scriptId) {
-                const sidebarManager = this.workflowPage?.getSidebarManager?.();
-                if (sidebarManager) {
-                    const currentScript = sidebarManager.getCurrentScript?.();
-                    if (currentScript && currentScript.id) {
-                        scriptId = currentScript.id;
-                    }
-                }
-            }
-
-            // 스크립트 ID를 찾았으면 currentScriptId 업데이트
-            if (scriptId) {
-                this.currentScriptId = scriptId;
-                // 스택이 없으면 생성
-                if (!this.undoStacks.has(scriptId)) {
-                    this.undoStacks.set(scriptId, []);
-                }
-            } else {
-                // 스크립트 ID를 찾지 못한 경우 경고만 표시하고 스냅샷 생성 계속
-                log('[UndoRedoService] 경고: 스크립트 ID를 찾을 수 없습니다. 스냅샷은 생성되지만 스크립트 ID 없음');
-            }
+            log('[UndoRedoService] 경고: 스크립트 ID를 찾을 수 없습니다. 스냅샷은 생성되지만 스크립트 ID 없음');
         }
 
         // 모든 노드의 정보 수집 (DB 스키마 기반)
@@ -221,6 +197,7 @@ export class UndoRedoService {
         }
 
         const undoStack = this.getCurrentUndoStack();
+        const snapshotType = afterSnapshot.type || 'unknown';
 
         // Undo 스택에 추가
         undoStack.push({
@@ -228,14 +205,65 @@ export class UndoRedoService {
             after: afterSnapshot
         });
 
-        // 최대 크기 제한
-        if (undoStack.length > this.maxStackSize) {
-            undoStack.shift();
-        }
+        // 스택 크기 제한 적용 (모든 작업 공통으로 20번 제한)
+        this._limitStackSize(undoStack, this.maxStackSize);
 
         log(
-            `[UndoRedoService] 스냅샷 저장 완료: ${afterSnapshot.type} (스크립트: ${this.currentScriptId}, 스택 크기: ${undoStack.length})`
+            `[UndoRedoService] 스냅샷 저장 완료: ${snapshotType} (스크립트: ${this.currentScriptId}, 스택 크기: ${undoStack.length}/${this.maxStackSize})`
         );
+    }
+
+    /**
+     * 스크립트 ID 가져오기 또는 업데이트 (여러 소스에서 시도)
+     * @returns {number|string|null} 스크립트 ID
+     */
+    _getOrUpdateScriptId() {
+        // 이미 currentScriptId가 있으면 반환
+        if (this.currentScriptId) {
+            return this.currentScriptId;
+        }
+
+        let scriptId = null;
+
+        // 1. loadService에서 가져오기
+        const loadService = this.workflowPage?.getLoadService?.();
+        if (loadService) {
+            scriptId = loadService.getLastLoadedScriptId();
+        }
+
+        // 2. 여전히 없으면 sidebarManager에서 가져오기
+        if (!scriptId) {
+            const sidebarManager = this.workflowPage?.getSidebarManager?.();
+            if (sidebarManager) {
+                const currentScript = sidebarManager.getCurrentScript?.();
+                if (currentScript && currentScript.id) {
+                    scriptId = currentScript.id;
+                }
+            }
+        }
+
+        // 스크립트 ID를 찾았으면 currentScriptId 업데이트
+        if (scriptId) {
+            this.currentScriptId = scriptId;
+            // 스택이 없으면 생성
+            if (!this.undoStacks.has(scriptId)) {
+                this.undoStacks.set(scriptId, []);
+            }
+        }
+
+        return scriptId;
+    }
+
+    /**
+     * 스택 크기 제한 적용
+     * @param {Array} stack - 제한할 스택
+     * @param {number} maxSize - 최대 크기
+     */
+    _limitStackSize(stack, maxSize) {
+        if (stack.length > maxSize) {
+            const removeCount = stack.length - maxSize;
+            stack.splice(0, removeCount);
+        }
     }
 
     /**
@@ -250,25 +278,7 @@ export class UndoRedoService {
 
         // 스크립트 ID 확인 (없으면 여러 소스에서 가져오기)
         if (!this.currentScriptId) {
-            let scriptId = null;
-
-            // 1. loadService에서 가져오기
-            const loadService = this.workflowPage?.getLoadService?.();
-            if (loadService) {
-                scriptId = loadService.getLastLoadedScriptId();
-            }
-
-            // 2. 여전히 없으면 sidebarManager에서 가져오기
-            if (!scriptId) {
-                const sidebarManager = this.workflowPage?.getSidebarManager?.();
-                if (sidebarManager) {
-                    const currentScript = sidebarManager.getCurrentScript?.();
-                    if (currentScript && currentScript.id) {
-                        scriptId = currentScript.id;
-                    }
-                }
-            }
-
+            const scriptId = this._getOrUpdateScriptId();
             if (scriptId) {
                 this.switchScript(scriptId);
             } else {
@@ -312,7 +322,7 @@ export class UndoRedoService {
     }
 
     /**
-     * 스냅샷 복원 (노드 위치만 복원, DB 스키마 기반)
+     * 스냅샷 복원 (노드 위치 복원 및 삭제된 노드 복원, DB 스키마 기반)
      * @param {Object} snapshot - 복원할 스냅샷
      */
     restoreSnapshot(snapshot) {
@@ -342,76 +352,248 @@ export class UndoRedoService {
             }
 
             const nodesState = snapshot.nodesState;
+            const snapshotType = snapshot.type || 'move';
 
-            // 각 노드의 위치 복원 (DB 스키마 기반)
-            Object.keys(nodesState).forEach((nodeId) => {
-                const nodeState = nodesState[nodeId];
-                const nodeElement =
-                    document.getElementById(nodeId) || canvasContent.querySelector(`[data-node-id="${nodeId}"]`);
-
-                if (nodeElement && nodeState) {
-                    // 노드가 현재 캔버스에 존재하는지 확인
-                    const nodeInCanvas = canvasContent.contains(nodeElement);
-                    if (!nodeInCanvas) {
-                        return;
-                    }
-
-                    // 위치 복원 (DB: position_x, position_y)
-                    const position = nodeState.position || { x: nodeState.x || 0, y: nodeState.y || 0 };
-                    nodeElement.style.left = `${position.x}px`;
-                    nodeElement.style.top = `${position.y}px`;
-
-                    // nodeData에 위치 및 기타 정보 반영 (DB 스키마 기반)
-                    if (nodeManager.nodeData) {
-                        if (!nodeManager.nodeData[nodeId]) {
-                            nodeManager.nodeData[nodeId] = {};
-                        }
-
-                        // 위치 정보 업데이트
-                        nodeManager.nodeData[nodeId].x = position.x;
-                        nodeManager.nodeData[nodeId].y = position.y;
-
-                        // 기타 정보도 업데이트 (복원 시 일관성 유지)
-                        if (nodeState.type) {
-                            nodeManager.nodeData[nodeId].type = nodeState.type;
-                        }
-                        if (nodeState.data) {
-                            nodeManager.nodeData[nodeId].data = { ...nodeState.data };
-                        }
-                        if (nodeState.parameters) {
-                            nodeManager.nodeData[nodeId].parameters = { ...nodeState.parameters };
-                        }
-                        if (nodeState.description !== undefined) {
-                            nodeManager.nodeData[nodeId].description = nodeState.description;
-                        }
-                        if (nodeState.is_connected !== undefined) {
-                            nodeManager.nodeData[nodeId].is_connected = nodeState.is_connected;
-                        }
-                        if (nodeState.connection_sequence !== undefined) {
-                            nodeManager.nodeData[nodeId].connection_sequence = nodeState.connection_sequence;
-                        }
-                        if (nodeState.node_identifier !== undefined) {
-                            nodeManager.nodeData[nodeId].node_identifier = nodeState.node_identifier;
-                        }
-                    }
-                }
-            });
+            // delete 타입의 경우: 삭제된 노드를 복원해야 함
+            if (snapshotType === 'delete') {
+                this._restoreDeletedNodes(nodesState, nodeManager, canvasContent, snapshot);
+            } else {
+                // move 타입의 경우: 기존 노드 위치만 복원
+                this._restoreNodePositions(nodesState, nodeManager, canvasContent);
+            }
 
             // 연결선 업데이트
             if (nodeManager.connectionManager) {
                 setTimeout(() => {
                     nodeManager.connectionManager.updateAllConnections();
-                }, 50);
+                }, TIMING_CONSTANTS.DEFAULT_DELAY);
             }
 
             // DB 저장
             setTimeout(() => {
                 this.saveToDatabase();
                 this.isRestoring = false;
-            }, 100);
+            }, TIMING_CONSTANTS.MEDIUM_DELAY);
         } catch (error) {
             logError('[UndoRedoService] 스냅샷 복원 실패:', error);
             this.isRestoring = false;
+        }
+    }
+
+    /**
+     * 노드 요소 찾기 헬퍼 메서드
+     * @param {string} nodeId - 노드 ID
+     * @param {HTMLElement} canvasContent - 캔버스 컨텐츠 요소
+     * @returns {HTMLElement|null} 노드 요소
+     */
+    _findNodeElement(nodeId, canvasContent) {
+        return document.getElementById(nodeId) || canvasContent.querySelector(`[data-node-id="${nodeId}"]`);
+    }
+
+    /**
+     * 노드 위치 복원 헬퍼 메서드
+     * @param {HTMLElement} nodeElement - 노드 요소
+     * @param {Object} nodeState - 노드 상태
+     * @param {NodeManager} nodeManager - 노드 매니저
+     */
+    _restoreNodePosition(nodeElement, nodeState, nodeManager) {
+        const position = nodeState.position || { x: nodeState.x || 0, y: nodeState.y || 0 };
+        nodeElement.style.left = `${position.x}px`;
+        nodeElement.style.top = `${position.y}px`;
+        this._updateNodeData(nodeManager, nodeState.id, nodeState, position);
+    }
+
+    /**
+     * 노드 위치 복원 (move 타입용)
+     * @param {Object} nodesState - 노드 상태 객체
+     * @param {NodeManager} nodeManager - 노드 매니저
+     * @param {HTMLElement} canvasContent - 캔버스 컨텐츠 요소
+     */
+    _restoreNodePositions(nodesState, nodeManager, canvasContent) {
+        Object.keys(nodesState).forEach((nodeId) => {
+            const nodeState = nodesState[nodeId];
+            if (!nodeState) {
+                return;
+            }
+
+            const nodeElement = this._findNodeElement(nodeId, canvasContent);
+            if (!nodeElement) {
+                return;
+            }
+
+            // 노드가 현재 캔버스에 존재하는지 확인
+            if (!canvasContent.contains(nodeElement)) {
+                return;
+            }
+
+            // 위치 복원
+            this._restoreNodePosition(nodeElement, nodeState, nodeManager);
+        });
+    }
+
+    /**
+     * 삭제된 노드 복원 (delete 타입용)
+     * @param {Object} nodesState - 노드 상태 객체
+     * @param {NodeManager} nodeManager - 노드 매니저
+     * @param {HTMLElement} canvasContent - 캔버스 컨텐츠 요소
+     * @param {Object} snapshot - 전체 스냅샷 (연결 정보 복원용)
+     */
+    _restoreDeletedNodes(nodesState, nodeManager, canvasContent, snapshot) {
+        Object.keys(nodesState).forEach((nodeId) => {
+            const nodeState = nodesState[nodeId];
+            if (!nodeState) {
+                return;
+            }
+
+            // 노드가 이미 존재하는지 확인
+            const existingNode = this._findNodeElement(nodeId, canvasContent);
+
+            if (existingNode) {
+                // 노드가 이미 존재하면 위치만 복원
+                this._restoreNodePosition(existingNode, nodeState, nodeManager);
+            } else {
+                // 노드가 없으면 새로 생성
+                this._recreateNodeFromSnapshot(nodeState, nodeManager, snapshot);
+            }
+        });
+    }
+
+    /**
+     * 스냅샷에서 노드 재생성
+     * @param {Object} nodeState - 노드 상태
+     * @param {NodeManager} nodeManager - 노드 매니저
+     * @param {Object} snapshot - 전체 스냅샷 (연결 정보 복원용)
+     */
+    _recreateNodeFromSnapshot(nodeState, nodeManager, snapshot) {
+        try {
+            const position = nodeState.position || { x: 0, y: 0 };
+
+            // 노드 데이터 구성
+            const nodeData = {
+                id: nodeState.id,
+                type: nodeState.type,
+                title: nodeState.data?.title || nodeState.data?.label || '노드',
+                x: position.x,
+                y: position.y,
+                data: nodeState.data || {},
+                parameters: nodeState.parameters || {},
+                description: nodeState.description || null
+            };
+
+            // 노드 생성
+            const nodeElement = nodeManager.createNode(nodeData);
+
+            // nodeData에 모든 정보 저장
+            if (nodeManager.nodeData) {
+                if (!nodeManager.nodeData[nodeState.id]) {
+                    nodeManager.nodeData[nodeState.id] = {};
+                }
+                this._updateNodeData(nodeManager, nodeState.id, nodeState, position);
+            }
+
+            // 연결 정보 복원 (connected_to와 connected_from 모두 복원)
+            if (nodeManager.connectionManager) {
+                setTimeout(() => {
+                    // connected_to 복원 (이 노드에서 나가는 연결)
+                    if (nodeState.connected_to && nodeState.connected_to.length > 0) {
+                        nodeState.connected_to.forEach((conn) => {
+                            try {
+                                // 대상 노드가 존재하는지 확인
+                                const canvasContent = document.getElementById('canvas-content');
+                                const targetNode = canvasContent ? this._findNodeElement(conn.to, canvasContent) : null;
+                                if (targetNode) {
+                                    nodeManager.connectionManager.createConnection(
+                                        nodeState.id,
+                                        conn.to,
+                                        conn.outputType || null
+                                    );
+                                }
+                            } catch (error) {
+                                logError(`[UndoRedoService] 연결 복원 실패: ${nodeState.id} -> ${conn.to}`, error);
+                            }
+                        });
+                    }
+
+                    // connected_from 복원 (이 노드로 들어오는 연결)
+                    if (nodeState.connected_from && nodeState.connected_from.length > 0) {
+                        nodeState.connected_from.forEach((fromNodeId) => {
+                            try {
+                                // 소스 노드가 존재하는지 확인
+                                const canvasContent = document.getElementById('canvas-content');
+                                const sourceNode = canvasContent
+                                    ? this._findNodeElement(fromNodeId, canvasContent)
+                                    : null;
+                                if (sourceNode) {
+                                    // connected_to 정보에서 outputType 찾기
+                                    const sourceNodeState = snapshot?.nodesState?.[fromNodeId];
+                                    let outputType = null;
+                                    if (sourceNodeState && sourceNodeState.connected_to) {
+                                        const conn = sourceNodeState.connected_to.find((c) => c.to === nodeState.id);
+                                        if (conn) {
+                                            outputType = conn.outputType || null;
+                                        }
+                                    }
+                                    nodeManager.connectionManager.createConnection(
+                                        fromNodeId,
+                                        nodeState.id,
+                                        outputType
+                                    );
+                                }
+                            } catch (error) {
+                                logError(`[UndoRedoService] 연결 복원 실패: ${fromNodeId} -> ${nodeState.id}`, error);
+                            }
+                        });
+                    }
+                }, 100);
+            }
+
+            log(`[UndoRedoService] 노드 복원 완료: ${nodeState.id}`);
+        } catch (error) {
+            logError(`[UndoRedoService] 노드 재생성 실패: ${nodeState.id}`, error);
+        }
+    }
+
+    /**
+     * nodeData 업데이트 헬퍼 메서드
+     * @param {NodeManager} nodeManager - 노드 매니저
+     * @param {string} nodeId - 노드 ID
+     * @param {Object} nodeState - 노드 상태
+     * @param {Object} position - 위치 정보
+     */
+    _updateNodeData(nodeManager, nodeId, nodeState, position) {
+        if (!nodeManager.nodeData) {
+            return;
+        }
+
+        if (!nodeManager.nodeData[nodeId]) {
+            nodeManager.nodeData[nodeId] = {};
+        }
+
+        // 위치 정보 업데이트
+        nodeManager.nodeData[nodeId].x = position.x;
+        nodeManager.nodeData[nodeId].y = position.y;
+
+        // 기타 정보도 업데이트 (복원 시 일관성 유지)
+        if (nodeState.type) {
+            nodeManager.nodeData[nodeId].type = nodeState.type;
+        }
+        if (nodeState.data) {
+            nodeManager.nodeData[nodeId].data = { ...nodeState.data };
+        }
+        if (nodeState.parameters) {
+            nodeManager.nodeData[nodeId].parameters = { ...nodeState.parameters };
+        }
+        if (nodeState.description !== undefined) {
+            nodeManager.nodeData[nodeId].description = nodeState.description;
+        }
+        if (nodeState.is_connected !== undefined) {
+            nodeManager.nodeData[nodeId].is_connected = nodeState.is_connected;
+        }
+        if (nodeState.connection_sequence !== undefined) {
+            nodeManager.nodeData[nodeId].connection_sequence = nodeState.connection_sequence;
+        }
+        if (nodeState.node_identifier !== undefined) {
+            nodeManager.nodeData[nodeId].node_identifier = nodeState.node_identifier;
         }
     }
 
@@ -421,6 +603,15 @@ export class UndoRedoService {
      * @param {Object} afterSnapshot - 이동 후 스냅샷
      */
     saveMoveSnapshot(beforeSnapshot, afterSnapshot) {
+        this.saveSnapshot(beforeSnapshot, afterSnapshot);
+    }
+
+    /**
+     * 노드 삭제 스냅샷 저장
+     * @param {Object} beforeSnapshot - 삭제 전 스냅샷
+     * @param {Object} afterSnapshot - 삭제 후 스냅샷
+     */
+    saveDeleteSnapshot(beforeSnapshot, afterSnapshot) {
         this.saveSnapshot(beforeSnapshot, afterSnapshot);
     }
 

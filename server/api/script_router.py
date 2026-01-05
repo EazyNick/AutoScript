@@ -6,7 +6,14 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
-from api.response_helpers import error_response, list_response, success_response
+from api.helpers import (
+    error_response,
+    get_script_or_raise,
+    list_response,
+    save_script_data_or_raise,
+    success_response,
+)
+from api.helpers.constants import API_CONSTANTS
 from db.database import db_manager
 from log import log_manager
 from models import (
@@ -39,7 +46,10 @@ async def get_all_scripts(request: Request) -> ListResponse:
         return list_response(scripts, "스크립트 목록 조회 완료")
     except Exception as e:
         logger.error(f"[API] 스크립트 목록 조회 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 목록 조회 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_LIST_FAILED}: {e!s}",
+        )
 
 
 @router.get("/scripts/{script_id}", response_model=ScriptResponse)
@@ -54,7 +64,7 @@ async def get_script(script_id: int, request: Request) -> dict[str, Any]:
         if not script:
             logger.warning(f"[DB 조회] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
             logger.warning(f"[API] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            raise HTTPException(status_code=404, detail="스크립트를 찾을 수 없습니다.")
+            raise HTTPException(status_code=API_CONSTANTS.HTTP_NOT_FOUND, detail=API_CONSTANTS.ERROR_SCRIPT_NOT_FOUND)
 
         script_name = script.get("name", "N/A")
         nodes_count = len(script.get("nodes", []))
@@ -93,7 +103,10 @@ async def get_script(script_id: int, request: Request) -> dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"[API] 스크립트 조회 실패 - 스크립트 ID: {script_id}, 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 조회 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_GET_FAILED}: {e!s}",
+        )
 
 
 @router.post("/scripts", response_model=SuccessResponse)
@@ -151,7 +164,10 @@ async def create_script(request: ScriptCreateRequest, http_request: Request) -> 
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"[API] 스크립트 생성 실패 - 이름: {request.name}, 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 생성 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_CREATE_FAILED}: {e!s}",
+        )
 
 
 @router.put("/scripts/{script_id}", response_model=SuccessResponse)
@@ -160,27 +176,24 @@ async def update_script(script_id: int, request: ScriptUpdateRequest) -> Success
     try:
         # 스크립트 존재 확인
         logger.info(f"[DB 조회] 스크립트 조회 시작 - 스크립트 ID: {script_id}")
-        script = db_manager.get_script(script_id)
-        if not script:
-            logger.warning(f"[DB 조회] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            raise HTTPException(status_code=404, detail="스크립트를 찾을 수 없습니다.")
+        get_script_or_raise(script_id)  # 스크립트 존재 확인만 수행
         logger.info(f"[DB 조회] 스크립트 조회 완료 - 스크립트 ID: {script_id}")
 
         # 노드와 연결 정보 저장
         logger.info(
             f"[DB 저장] 스크립트 데이터 저장 시작 - 스크립트 ID: {script_id}, 노드 개수: {len(request.nodes)}, 연결 개수: {len(request.connections)}"
         )
-        success = db_manager.save_script_data(script_id, request.nodes, request.connections)
+        save_script_data_or_raise(script_id, request.nodes, request.connections, "스크립트 업데이트 실패")
         logger.info(f"[DB 저장] 스크립트 데이터 저장 완료 - 스크립트 ID: {script_id}")
-
-        if success:
-            return success_response(message="스크립트가 업데이트되었습니다.")
-        raise HTTPException(status_code=500, detail="스크립트 업데이트 실패")
+        return success_response(message="스크립트가 업데이트되었습니다.")
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"스크립트 업데이트 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_UPDATE_FAILED}: {e!s}",
+        )
 
 
 @router.delete("/scripts/{script_id}", response_model=SuccessResponse)
@@ -192,11 +205,7 @@ async def delete_script(script_id: int, request: Request) -> SuccessResponse:
     try:
         # 삭제 전 스크립트 존재 확인
         logger.info(f"[DB 조회] 삭제 전 스크립트 조회 시작 - 스크립트 ID: {script_id}")
-        script = db_manager.get_script(script_id)
-        if not script:
-            logger.warning(f"[DB 조회] 삭제할 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            logger.warning(f"[API] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            raise HTTPException(status_code=404, detail="스크립트를 찾을 수 없습니다.")
+        script = get_script_or_raise(script_id)
 
         script_name = script.get("name", "N/A")
         logger.info(f"[DB 조회] 삭제할 스크립트 확인됨 - 스크립트 ID: {script_id}, 이름: {script_name}")
@@ -223,7 +232,10 @@ async def delete_script(script_id: int, request: Request) -> SuccessResponse:
         raise
     except Exception as e:
         logger.error(f"[API] 스크립트 삭제 실패 - 스크립트 ID: {script_id}, 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 삭제 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_DELETE_FAILED}: {e!s}",
+        )
 
 
 @router.put("/nodes/script/{script_id}/batch", response_model=SuccessResponse)
@@ -241,7 +253,7 @@ async def update_nodes_batch(
         if not script:
             logger.warning(f"[DB 조회] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
             logger.warning(f"[API] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            raise HTTPException(status_code=404, detail="스크립트를 찾을 수 없습니다.")
+            raise HTTPException(status_code=API_CONSTANTS.HTTP_NOT_FOUND, detail=API_CONSTANTS.ERROR_SCRIPT_NOT_FOUND)
 
         script_name = script.get("name", "N/A")
         logger.info(f"[DB 조회] 스크립트 조회 완료 - 스크립트 ID: {script_id}, 이름: {script_name}")
@@ -258,29 +270,28 @@ async def update_nodes_batch(
         logger.info(
             f"[DB 저장] 노드 일괄 업데이트 시작 - 스크립트 ID: {script_id}, 노드 개수: {len(nodes)}, 연결 개수: {len(connections)}"
         )
-        success = db_manager.save_script_data(script_id, nodes, connections)
-
-        if success:
-            logger.info(f"[DB 저장] 노드 일괄 업데이트 완료 - 스크립트 ID: {script_id}")
-            logger.info(
-                f"[API] 노드 일괄 업데이트 성공 - 스크립트 ID: {script_id}, 이름: {script_name}, 노드: {len(nodes)}개, 연결: {len(connections)}개"
-            )
-            return success_response(
-                {
-                    "script_id": script_id,
-                    "nodes_count": len(nodes),
-                    "connections_count": len(connections),
-                },
-                "노드가 성공적으로 저장되었습니다.",
-            )
-        logger.error(f"[DB 저장] 노드 일괄 업데이트 실패 - 스크립트 ID: {script_id}")
-        raise HTTPException(status_code=500, detail="노드 저장 실패")
+        save_script_data_or_raise(script_id, nodes, connections, "노드 저장 실패")
+        logger.info(f"[DB 저장] 노드 일괄 업데이트 완료 - 스크립트 ID: {script_id}")
+        logger.info(
+            f"[API] 노드 일괄 업데이트 성공 - 스크립트 ID: {script_id}, 이름: {script_name}, 노드: {len(nodes)}개, 연결: {len(connections)}개"
+        )
+        return success_response(
+            {
+                "script_id": script_id,
+                "nodes_count": len(nodes),
+                "connections_count": len(connections),
+            },
+            "노드가 성공적으로 저장되었습니다.",
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[API] 노드 일괄 업데이트 실패 - 스크립트 ID: {script_id}, 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"노드 저장 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_NODE_SAVE_FAILED}: {e!s}",
+        )
 
 
 @router.post("/scripts/{script_id}/execute", response_model=BaseResponse)
@@ -294,10 +305,7 @@ async def execute_script(script_id: int, request: NodeExecutionRequest) -> Stand
     try:
         # 스크립트 존재 확인
         logger.info(f"[DB 조회] 스크립트 조회 시작 - 스크립트 ID: {script_id}")
-        script = db_manager.get_script(script_id)
-        if not script:
-            logger.warning(f"[DB 조회] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            raise HTTPException(status_code=404, detail="스크립트를 찾을 수 없습니다.")
+        script = get_script_or_raise(script_id)
         logger.info(f"[DB 조회] 스크립트 조회 완료 - 스크립트 ID: {script_id}, 이름: {script.get('name', 'N/A')}")
 
         # 스크립트 실행 기록 저장 (시작)
@@ -332,7 +340,11 @@ async def execute_script(script_id: int, request: NodeExecutionRequest) -> Stand
                 logger.error(f"[API] 노드 실행 실패 - 노드 타입: {node.get('type', 'unknown')}, 에러: {error_msg}")
 
         # 실행 완료 시간 계산
-        execution_time_ms = int((time.time() - execution_start_time) * 1000) if execution_start_time else None
+        execution_time_ms = (
+            int((time.time() - execution_start_time) * API_CONSTANTS.MILLISECONDS_PER_SECOND)
+            if execution_start_time
+            else None
+        )
 
         # 스크립트 실행 기록 업데이트 (완료)
         if execution_record_id:
@@ -364,7 +376,10 @@ async def execute_script(script_id: int, request: NodeExecutionRequest) -> Stand
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"스크립트 실행 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_EXECUTE_FAILED}: {e!s}",
+        )
 
 
 @router.patch("/scripts/{script_id}/active", response_model=SuccessResponse)
@@ -380,10 +395,7 @@ async def toggle_script_active(
     try:
         # 스크립트 존재 확인
         logger.info(f"[DB 조회] 스크립트 조회 시작 - 스크립트 ID: {script_id}")
-        script = db_manager.get_script(script_id)
-        if not script:
-            logger.warning(f"[DB 조회] 스크립트를 찾을 수 없음 - 스크립트 ID: {script_id}")
-            raise HTTPException(status_code=404, detail="스크립트를 찾을 수 없습니다.")
+        script = get_script_or_raise(script_id)
 
         script_name = script.get("name", "N/A")
         logger.info(f"[DB 조회] 스크립트 조회 완료 - 스크립트 ID: {script_id}, 이름: {script_name}")
@@ -407,13 +419,18 @@ async def toggle_script_active(
             )
             return success_response({"active": active}, "스크립트 활성 상태가 변경되었습니다.")
         logger.error(f"[DB 저장] 스크립트 활성 상태 업데이트 실패 - 스크립트 ID: {script_id}")
-        raise HTTPException(status_code=500, detail="스크립트 활성 상태 변경 실패")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR, detail=API_CONSTANTS.ERROR_SCRIPT_ACTIVE_STATE_FAILED
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[API] 스크립트 활성 상태 변경 실패 - 스크립트 ID: {script_id}, 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 활성 상태 변경 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_ACTIVE_STATE_FAILED}: {e!s}",
+        )
 
 
 @router.post("/scripts/{script_id}/execution-record", response_model=SuccessResponse)
@@ -450,12 +467,18 @@ async def record_script_execution(
                 "스크립트 실행 기록 저장 완료",
             )
         logger.warning(f"[API] 스크립트 실행 기록 저장 실패 - 스크립트 ID: {script_id}")
-        raise HTTPException(status_code=500, detail="스크립트 실행 기록 저장 실패")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=API_CONSTANTS.ERROR_SCRIPT_EXECUTION_RECORD_FAILED,
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[API] 스크립트 실행 기록 저장 실패 - 스크립트 ID: {script_id}, 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 실행 기록 저장 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_EXECUTION_RECORD_FAILED}: {e!s}",
+        )
 
 
 @router.patch("/scripts/order", response_model=SuccessResponse)
@@ -468,9 +491,14 @@ async def update_script_order(request: Request, script_orders: list[dict[str, in
         if success:
             logger.info(f"[API] 스크립트 순서 업데이트 성공 - 순서: {script_orders}")
             return success_response({"orders": script_orders}, "스크립트 순서가 업데이트되었습니다.")
-        raise HTTPException(status_code=500, detail="스크립트 순서 업데이트 실패")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR, detail=API_CONSTANTS.ERROR_SCRIPT_ORDER_UPDATE_FAILED
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"[API] 스크립트 순서 업데이트 실패 - 에러: {e!s}")
-        raise HTTPException(status_code=500, detail=f"스크립트 순서 업데이트 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_SCRIPT_ORDER_UPDATE_FAILED}: {e!s}",
+        )

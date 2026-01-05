@@ -12,6 +12,10 @@
  * ES6 모듈 방식으로 작성됨
  */
 
+import { SIZE_CONSTANTS } from '../../../pages/workflow/constants/size-constants.js';
+import { TIMING_CONSTANTS } from '../../../pages/workflow/constants/timing-constants.js';
+import { STYLE_CONSTANTS } from '../../../pages/workflow/constants/style-constants.js';
+
 // Logger는 logger.js에서 로드됨
 const log = window.Logger ? window.Logger.log.bind(window.Logger) : console.log;
 const logWarn = window.Logger ? window.Logger.warn.bind(window.Logger) : console.warn;
@@ -26,7 +30,10 @@ export class NodeManager {
 
         // === 무한 캔버스 관련 속성 ===
         this.isInfiniteCanvas = true; // 무한 캔버스 모드 활성화 여부
-        this.canvasSize = { width: 50000, height: 50000 }; // 무한 캔버스 가상 크기
+        this.canvasSize = {
+            width: SIZE_CONSTANTS.INFINITE_CANVAS_WIDTH,
+            height: SIZE_CONSTANTS.INFINITE_CANVAS_HEIGHT
+        };
 
         // === 연결 모드 관련 속성 ===
         this.isConnecting = false; // 연결 모드 여부 (기본: false)
@@ -48,9 +55,9 @@ export class NodeManager {
         this.pendingConnectionUpdateNodeId = null;
 
         // 마그네틱 연결 거리 임계값(픽셀)
-        this.magneticThreshold = 40;
+        this.magneticThreshold = SIZE_CONSTANTS.MAGNETIC_THRESHOLD;
         // 롱터치로 연결 그리기 활성화까지 지연(ms)
-        this.longTouchDelay = 600;
+        this.longTouchDelay = TIMING_CONSTANTS.LONG_TOUCH_DELAY;
 
         this.init();
     }
@@ -1076,7 +1083,7 @@ export class NodeManager {
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('stroke', '#FF6B35');
-        path.setAttribute('stroke-width', '3');
+        path.setAttribute('stroke-width', String(SIZE_CONSTANTS.STROKE_WIDTH));
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke-dasharray', '5,5');
         path.setAttribute('d', `M ${startX} ${startY} L ${startX} ${startY}`);
@@ -2032,13 +2039,24 @@ export class NodeManager {
      * @param {HTMLElement} node - 삭제할 노드 요소
      * @param {boolean} force - true이면 시작/종료 노드도 강제 삭제 (스크립트 전환 시 사용)
      */
-    deleteNode(node, force = false) {
+    async deleteNode(node, force = false) {
         const nodeId = node.dataset.nodeId || node.id;
 
         // 시작/종료 노드는 삭제 금지 (단, force가 true이면 허용)
         if (!force && nodeId === 'start') {
             logWarn('시작/종료 노드는 삭제할 수 없습니다.');
             return;
+        }
+
+        // force가 false인 경우에만 스냅샷 저장 (스크립트 전환 시에는 스냅샷 저장 안 함)
+        let beforeSnapshot = null;
+        let afterSnapshot = null;
+        if (!force) {
+            const undoRedoService = this.workflowPage?.getUndoRedoService?.();
+            if (undoRedoService) {
+                // 삭제 전 스냅샷 생성
+                beforeSnapshot = undoRedoService.createSnapshot('delete');
+            }
         }
 
         // DOM에서 제거
@@ -2067,7 +2085,65 @@ export class NodeManager {
             this.selectedNode = null;
         }
 
+        // force가 false인 경우에만 스냅샷 저장 및 서버 삭제 요청
+        if (!force) {
+            const undoRedoService = this.workflowPage?.getUndoRedoService?.();
+            if (undoRedoService && beforeSnapshot) {
+                // 삭제 후 스냅샷 생성
+                afterSnapshot = undoRedoService.createSnapshot('delete');
+                // 스냅샷 저장
+                undoRedoService.saveDeleteSnapshot(beforeSnapshot, afterSnapshot);
+            }
+
+            // 서버에 삭제 요청
+            try {
+                const scriptId = this._getCurrentScriptId();
+                if (scriptId && window.NodeAPI) {
+                    await window.NodeAPI.deleteNode(scriptId, nodeId);
+                    log(`[NodeManager] 서버에서 노드 삭제 완료: ${nodeId}`);
+                }
+            } catch (error) {
+                logError(`[NodeManager] 서버 노드 삭제 실패: ${nodeId}`, error);
+            }
+        }
+
         log('노드 삭제 완료:', nodeId);
+    }
+
+    /**
+     * 현재 스크립트 ID 가져오기
+     * @returns {number|string|null} 스크립트 ID
+     */
+    _getCurrentScriptId() {
+        if (!this.workflowPage) {
+            return null;
+        }
+
+        // 1. undoRedoService에서 가져오기
+        const undoRedoService = this.workflowPage.getUndoRedoService?.();
+        if (undoRedoService && undoRedoService.currentScriptId) {
+            return undoRedoService.currentScriptId;
+        }
+
+        // 2. loadService에서 가져오기
+        const loadService = this.workflowPage.getLoadService?.();
+        if (loadService) {
+            const scriptId = loadService.getLastLoadedScriptId?.();
+            if (scriptId) {
+                return scriptId;
+            }
+        }
+
+        // 3. sidebarManager에서 가져오기
+        const sidebarManager = this.workflowPage.getSidebarManager?.();
+        if (sidebarManager) {
+            const currentScript = sidebarManager.getCurrentScript?.();
+            if (currentScript && currentScript.id) {
+                return currentScript.id;
+            }
+        }
+
+        return null;
     }
 
     /**

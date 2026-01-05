@@ -207,12 +207,15 @@ class DatabaseManager:
             if not result or not result[0]:
                 return False
 
-            # SQLite datetime 비교 (5분 = 300초)
+            # SQLite datetime 비교
+            from db.constants import DB_CONSTANTS
+
+            cache_minutes = DB_CONSTANTS.DASHBOARD_STATS_CACHE_MINUTES
             cursor.execute(
-                """
+                f"""
                 SELECT COUNT(*) FROM dashboard_stats
                 WHERE stat_key IN ('total_scripts', 'all_executions', 'all_failed_scripts', 'inactive_scripts')
-                AND datetime(updated_at) > datetime('now', '-5 minutes')
+                AND datetime(updated_at) > datetime('now', '-{cache_minutes} minutes')
                 """
             )
             count = cursor.fetchone()[0]

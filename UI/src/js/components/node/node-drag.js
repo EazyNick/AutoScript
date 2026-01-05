@@ -2,6 +2,8 @@
 // 노드 드래그 / 위치 업데이트 담당 컨트롤러
 // ES6 모듈 방식으로 작성됨
 
+import { TIMING_CONSTANTS } from '../../../pages/workflow/constants/timing-constants.js';
+
 // Logger는 logger.js에서 로드됨
 const log = window.Logger ? window.Logger.log.bind(window.Logger) : console.log;
 const logError = window.Logger ? window.Logger.error.bind(window.Logger) : console.error;
@@ -17,12 +19,13 @@ export class NodeDragController {
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         this.draggedNode = null;
+        this._snapshotSaveScheduled = false; // 스냅샷 저장 중복 실행 방지 플래그
 
         // 성능 최적화: 캔버스 바운딩 박스 캐싱
         // getBoundingClientRect()는 리플로우를 유발하므로 드래그 중에는 캐시된 값을 사용
         this.cachedCanvasRect = null;
         this.canvasRectCacheTime = 0;
-        this.CANVAS_RECT_CACHE_DURATION = 100; // 100ms 동안 캐시 유지
+        this.CANVAS_RECT_CACHE_DURATION = TIMING_CONSTANTS.CANVAS_RECT_CACHE_DURATION;
 
         // 성능 최적화: requestAnimationFrame을 사용한 업데이트 스로틀링
         // 매 mousemove마다 업데이트하지 않고, 브라우저 렌더링 주기에 맞춰 업데이트
@@ -32,7 +35,7 @@ export class NodeDragController {
         // 성능 최적화: 연결선 업데이트 스로틀링
         // 드래그 중에는 연결선 업데이트를 최소화하고, 드래그 종료 시에만 완전히 업데이트
         this.lastConnectionUpdateTime = 0;
-        this.CONNECTION_UPDATE_INTERVAL = 16; // 약 60fps (16ms마다 연결선 업데이트)
+        this.CONNECTION_UPDATE_INTERVAL = TIMING_CONSTANTS.CONNECTION_UPDATE_INTERVAL;
 
         this.bindGlobalEvents();
         this.setupResizeListener();
@@ -157,6 +160,7 @@ export class NodeDragController {
             logError('드래그 시작 실패:', error);
             this.isDragging = false;
             this.draggedNode = null;
+            this._snapshotSaveScheduled = false; // 플래그 초기화
         }
     }
 
@@ -342,7 +346,20 @@ export class NodeDragController {
 
                 if (this.dragStartSnapshot) {
                     // DOM 업데이트 완료를 기다린 후 스냅샷 저장
+                    // 중복 실행 방지: 이미 스냅샷 저장이 예약되어 있으면 건너뜀
+                    if (this._snapshotSaveScheduled) {
+                        log('[NodeDragController] 스냅샷 저장이 이미 예약되어 있어 건너뜀');
+                        return;
+                    }
+                    this._snapshotSaveScheduled = true;
+
                     setTimeout(() => {
+                        // 중복 실행 방지: 드래그가 끝났는지 다시 확인
+                        if (!this.dragStartSnapshot) {
+                            this._snapshotSaveScheduled = false;
+                            return;
+                        }
+
                         log('[NodeDragController] 드래그 종료 스냅샷 생성 시작');
                         const dragEndSnapshot = undoRedoService.createSnapshot('move');
                         if (dragEndSnapshot) {
@@ -353,6 +370,7 @@ export class NodeDragController {
                             log('[NodeDragController] 경고: 드래그 종료 스냅샷 생성 실패');
                         }
                         this.dragStartSnapshot = null; // 스냅샷 초기화
+                        this._snapshotSaveScheduled = false; // 플래그 초기화
                     }, 100); // 50ms -> 100ms로 증가 (DOM 업데이트 완료 대기)
                 } else {
                     log('[NodeDragController] 경고: 드래그 시작 스냅샷을 생성할 수 없어 스냅샷 저장 건너뜀');
@@ -380,7 +398,7 @@ export class NodeDragController {
             if (window.connectionManager) {
                 setTimeout(() => {
                     window.connectionManager.updateConnections();
-                }, 10);
+                }, TIMING_CONSTANTS.SHORT_DELAY);
             }
 
             // 캐시 무효화 (드래그 종료 시)
@@ -393,6 +411,7 @@ export class NodeDragController {
         } finally {
             this.isDragging = false;
             this.draggedNode = null;
+            this._snapshotSaveScheduled = false; // 플래그 초기화
             this.lastConnectionUpdateTime = 0; // 연결선 업데이트 시간 초기화
         }
     }
