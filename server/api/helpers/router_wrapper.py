@@ -9,6 +9,7 @@ from typing import ParamSpec, TypeVar
 
 from fastapi import HTTPException
 
+from api.helpers.constants import API_CONSTANTS
 from log import log_manager
 
 logger = log_manager.logger
@@ -54,6 +55,9 @@ def api_handler(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
             import traceback
 
             logger.error(f"스택 트레이스: {traceback.format_exc()}")
-            raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e!s}")
+            raise HTTPException(
+                status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+                detail=f"{API_CONSTANTS.ERROR_SERVER_INTERNAL_ERROR}: {e!s}",
+            )
 
     return wrapper

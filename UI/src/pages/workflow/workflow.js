@@ -7,6 +7,7 @@
  */
 
 // ES6 모듈 import - 명시적 의존성 관리
+import { TIMING_CONSTANTS, STYLE_CONSTANTS } from './constants/index.js';
 import { getSidebarInstance } from '../../js/components/sidebar/sidebar.js';
 import { ConnectionManager, setConnectionManager } from '../../js/components/connection/connection.js';
 import { getModalManagerInstance } from '../../js/utils/modal.js';
@@ -21,6 +22,7 @@ import { WorkflowLoadService } from './services/workflow-load-service.js';
 import { WorkflowExecutionService } from './services/workflow-execution-service.js';
 import { NodeUpdateService } from './services/node-update-service.js';
 import { NodeCreationService } from './services/node-creation-service.js';
+import { UndoRedoService } from './services/undo-redo-service.js';
 import { ViewportUtils } from './utils/viewport-utils.js';
 import { StorageUtils } from './utils/storage-utils.js';
 import { getNodeType, getNodeData, escapeHtml } from './utils/node-utils.js';
@@ -75,6 +77,7 @@ export class WorkflowPage {
         this.executionService = null; // 워크플로우 실행 서비스
         this.updateService = null; // 노드 업데이트 서비스
         this.creationService = null; // 노드 생성 서비스
+        this.undoRedoService = null; // Undo/Redo 서비스
 
         // 내부 상태 플래그
         this._initialized = false; // 중복 초기화 방지 플래그
@@ -116,6 +119,12 @@ export class WorkflowPage {
     getSaveService() {
         return this.saveService;
     }
+    getLoadService() {
+        return this.loadService;
+    }
+    getUndoRedoService() {
+        return this.undoRedoService;
+    }
 
     /**
      * 초기화 메서드
@@ -154,6 +163,7 @@ export class WorkflowPage {
         this.executionService = new WorkflowExecutionService(this);
         this.updateService = new NodeUpdateService(this);
         this.creationService = new NodeCreationService(this);
+        this.undoRedoService = new UndoRedoService(this);
 
         this.setupEventListeners();
         this.setupComponentEventListeners();
@@ -189,20 +199,27 @@ export class WorkflowPage {
     /**
      * 노드 스크립트 동적 로드
      * NodeManager가 로드된 후에 실행되어야 함
+     * 성능 최적화: 경계 노드(시작/종료)만 먼저 로드하고 나머지는 지연 로드
      */
     async loadNodeScripts() {
         const logger = getLogger();
         const log = logger.log;
 
-        // NodeManager가 로드될 때까지 대기
+        // NodeManager가 로드될 때까지 대기 (최대 1초)
         const waitForNodeManager = () => {
             return new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 20; // 최대 20번 시도 (약 1초)
                 const check = () => {
                     if (window.NodeManager) {
                         log('[WorkflowPage] NodeManager 로드 완료, 노드 스크립트 로드 시작');
                         resolve();
+                    } else if (attempts < maxAttempts) {
+                        attempts++;
+                        setTimeout(check, TIMING_CONSTANTS.DEFAULT_DELAY);
                     } else {
-                        setTimeout(check, 50);
+                        log('[WorkflowPage] NodeManager 로드 타임아웃, 경계 노드만 로드');
+                        resolve(); // 타임아웃되어도 계속 진행
                     }
                 };
                 check();
@@ -211,13 +228,24 @@ export class WorkflowPage {
 
         await waitForNodeManager();
 
-        // 노드 레지스트리를 사용하여 모든 노드 스크립트 로드
+        // 노드 레지스트리를 사용하여 경계 노드(시작/종료)만 먼저 로드
         const registry = getNodeRegistry();
         try {
-            await registry.loadAllNodeScripts();
-            log('[WorkflowPage] 모든 노드 스크립트 로드 완료');
+            // 경계 노드만 먼저 로드 (시작 노드 표시를 위해)
+            await registry.loadBoundaryNodeScripts();
+            log('[WorkflowPage] 경계 노드 스크립트 로드 완료');
+
+            // 나머지 노드는 백그라운드에서 지연 로드
+            registry
+                .loadAllNodeScripts()
+                .then(() => {
+                    log('[WorkflowPage] 모든 노드 스크립트 로드 완료 (지연 로드)');
+                })
+                .catch((error) => {
+                    logger.error('[WorkflowPage] 나머지 노드 스크립트 로드 중 오류:', error);
+                });
         } catch (error) {
-            logger.error('[WorkflowPage] 노드 스크립트 로드 중 오류:', error);
+            logger.error('[WorkflowPage] 경계 노드 스크립트 로드 중 오류:', error);
         }
     }
 
@@ -310,7 +338,7 @@ export class WorkflowPage {
                     nodeManager.connectionManager = new ConnectionManager(nodeManager.canvas);
                 }
             } else {
-                setTimeout(initNodes, 100);
+                setTimeout(initNodes, TIMING_CONSTANTS.MEDIUM_DELAY);
             }
         };
 
@@ -421,7 +449,7 @@ export class WorkflowPage {
             Object.values(buttons).forEach((btn) => {
                 if (btn) {
                     btn.disabled = true;
-                    btn.style.opacity = '0.5';
+                    btn.style.opacity = STYLE_CONSTANTS.OPACITY_DISABLED;
                     btn.style.cursor = 'not-allowed';
                     btn.classList.remove('executing');
                 }
@@ -431,7 +459,7 @@ export class WorkflowPage {
             if (activeButton && buttons[activeButton === 'run-btn' ? 'run' : 'runAll']) {
                 const activeBtn = buttons[activeButton === 'run-btn' ? 'run' : 'runAll'];
                 activeBtn.disabled = false;
-                activeBtn.style.opacity = '1';
+                activeBtn.style.opacity = STYLE_CONSTANTS.OPACITY_ENABLED;
                 activeBtn.style.cursor = 'pointer';
                 activeBtn.classList.add('executing');
 
@@ -447,7 +475,7 @@ export class WorkflowPage {
             Object.values(buttons).forEach((btn) => {
                 if (btn) {
                     btn.disabled = false;
-                    btn.style.opacity = '1';
+                    btn.style.opacity = STYLE_CONSTANTS.OPACITY_ENABLED;
                     btn.style.cursor = 'pointer';
                     btn.classList.remove('executing');
 
@@ -650,9 +678,18 @@ export class WorkflowPage {
                 return false;
             }
 
-            if (e.ctrlKey && e.key === 'n') {
+            // Ctrl+N - 노드 추가 모달 열기 (현재 포커스한 스크립트에서)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
                 e.preventDefault();
-                this.showAddNodeModal();
+                // 현재 스크립트가 선택되어 있는지 확인
+                const sidebarManager = this.getSidebarManager();
+                const currentScript = sidebarManager ? sidebarManager.getCurrentScript() : null;
+                if (currentScript && currentScript.id) {
+                    this.showAddNodeModal();
+                } else {
+                    const logger = this.getLogger();
+                    logger.log('[WorkflowPage] 현재 선택된 스크립트가 없어 노드 추가 모달을 열 수 없습니다.');
+                }
             }
 
             if (e.key === 'F5' && !e.ctrlKey) {
@@ -667,7 +704,10 @@ export class WorkflowPage {
 
             if (e.key === 'Delete' && nodeManager && nodeManager.selectedNode) {
                 e.preventDefault();
-                nodeManager.deleteNode(nodeManager.selectedNode);
+                nodeManager.deleteNode(nodeManager.selectedNode).catch((error) => {
+                    const logger = getLogger();
+                    logger.error('[WorkflowPage] 노드 삭제 실패:', error);
+                });
             }
 
             if (e.key === 'Escape') {

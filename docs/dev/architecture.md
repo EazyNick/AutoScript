@@ -1,4 +1,4 @@
-**최신 수정일자: 2025.12.28**
+**최신 수정일자: 2026.01.05**
 
 # 시스템 아키텍처
 
@@ -12,10 +12,16 @@
 
 ### 주요 모듈
 - **api/**: REST API 라우터 (`@api_handler` 데코레이터 사용)
+  - **api/helpers/**: 공통 헬퍼 함수 및 상수 (2026-01-05 추가)
+    - `script_helpers.py`: 스크립트 조회/저장 헬퍼
+    - `response_helpers.py`: 응답 생성 헬퍼
+    - `router_wrapper.py`: 라우터 래퍼 데코레이터
+    - `constants.py`: API 관련 상수 정의
 - **nodes/**: 노드 클래스 (`BaseNode` 상속, `@NodeExecutor` 데코레이터)
 - **services/**: 비즈니스 로직
 - **automation/**: 화면 캡처, 입력 처리, 워크플로우 실행
 - **db/**: SQLite 데이터베이스 관리
+  - **db/constants.py**: 데이터베이스 관련 상수 (2026-01-05 추가)
 - **execution_logging/**: 노드 실행 로그 관련 모듈 통합 (클라이언트, 모델, 리포지토리)
 - **log/**: 애플리케이션 로그 관리
 - **utils/**: 공통 유틸리티 (파라미터 검증, 결과 포맷팅 등)

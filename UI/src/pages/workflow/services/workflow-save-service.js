@@ -20,7 +20,22 @@ export class WorkflowSaveService {
      */
     async save(options = {}) {
         const sidebarManager = this.workflowPage.getSidebarManager();
-        const currentScript = sidebarManager ? sidebarManager.getCurrentScript() : null;
+        const loadService = this.workflowPage.getLoadService();
+
+        // 마지막으로 로드한 스크립트 ID를 우선 사용 (Undo/Redo 후 올바른 스크립트 저장 보장)
+        const lastLoadedScriptId = loadService ? loadService.getLastLoadedScriptId() : null;
+        let currentScript = sidebarManager ? sidebarManager.getCurrentScript() : null;
+
+        // _lastLoadedScriptId가 있으면 우선 사용
+        if (lastLoadedScriptId && currentScript && currentScript.id !== lastLoadedScriptId) {
+            const logger = this.workflowPage.getLogger();
+            logger.log(
+                `[WorkflowSaveService] 마지막 로드한 스크립트 ID(${lastLoadedScriptId})를 사용합니다. 현재 선택된 스크립트 ID(${currentScript.id}) 대신.`
+            );
+            // currentScript를 lastLoadedScriptId에 맞게 업데이트
+            currentScript = { ...currentScript, id: lastLoadedScriptId };
+        }
+
         const modalManager = this.workflowPage.getModalManager();
 
         // currentScript가 없거나 id가 없으면 에러 표시
@@ -33,7 +48,9 @@ export class WorkflowSaveService {
             // nodeManager: 노드 관리자 인스턴스 (노드 및 연결 정보 가져오기용)
             const nodeManager = this.workflowPage.getNodeManager();
             // nodes: 모든 노드 목록 (NodeManager 형식)
+            // getAllNodes() 내부에서 중복 체크 및 에러 발생
             const nodes = nodeManager ? nodeManager.getAllNodes() : [];
+
             // connections: 모든 연결 정보 (NodeManager 형식)
             const connections = nodeManager ? nodeManager.getAllConnections() : [];
 
@@ -45,13 +62,15 @@ export class WorkflowSaveService {
             const nodeAPI = this.workflowPage.getNodeAPI();
             if (nodeAPI) {
                 const logger = this.workflowPage.getLogger();
-                logger.log('[WorkflowPage] 저장 요청 시작:', {
-                    scriptId: currentScript.id,
+                const scriptIdToSave = currentScript.id;
+                logger.log('[WorkflowSaveService] 저장 요청 시작:', {
+                    scriptId: scriptIdToSave,
+                    lastLoadedScriptId: lastLoadedScriptId,
                     nodeCount: nodes.length,
                     connectionCount: connections.length
                 });
 
-                const response = await nodeAPI.updateNodesBatch(currentScript.id, nodesForAPI, connectionsForAPI);
+                const response = await nodeAPI.updateNodesBatch(scriptIdToSave, nodesForAPI, connectionsForAPI);
 
                 logger.log('[WorkflowPage] 저장 완료 응답:', response);
 

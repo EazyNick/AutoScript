@@ -3,6 +3,7 @@
  * 서버에서 워크플로우 데이터를 가져와 화면에 표시하는 로직을 담당합니다.
  */
 
+import { TIMING_CONSTANTS } from '../constants/timing-constants.js';
 import { getDefaultDescription } from '../config/node-defaults.js';
 import { NODE_TYPES } from '../constants/node-types.js';
 import { ScriptAPI } from '../../../js/api/scriptapi.js';
@@ -100,6 +101,12 @@ export class WorkflowLoadService {
 
         // 스크립트 ID 저장 (노드 제거 후에 저장)
         this._lastLoadedScriptId = script.id;
+
+        // Undo/Redo 서비스에 스크립트 전환 알림
+        const undoRedoService = this.workflowPage?.getUndoRedoService?.();
+        if (undoRedoService && script.id) {
+            undoRedoService.switchScript(script.id);
+        }
 
         try {
             if (ScriptAPI && script.id) {
@@ -271,8 +278,6 @@ export class WorkflowLoadService {
             nodeManager.nodes.length = 0; // 배열 길이를 0으로 설정하여 요소만 제거
             log('[WorkflowPage] NodeManager.nodes 배열 초기화 완료');
         }
-
-        log('[WorkflowPage] ✅ 기존 노드 제거 완료');
 
         log('[WorkflowPage] ✅ 기존 노드 제거 완료');
     }
@@ -536,7 +541,7 @@ export class WorkflowLoadService {
             // 노드가 DOM에 추가되고 위치가 설정될 때까지 대기 (최대 1초)
             await new Promise((resolve) => {
                 let checkCount = 0;
-                const maxChecks = 20; // 최대 20번 확인 (약 1초)
+                const maxChecks = TIMING_CONSTANTS.MAX_NODE_CHECK_ATTEMPTS;
 
                 const checkNode = () => {
                     const nodeElement =
@@ -607,7 +612,7 @@ export class WorkflowLoadService {
                                 nodeManager.adjustBottomOutputPosition(nodeElement);
                             }
                         }
-                    }, 100);
+                    }, TIMING_CONSTANTS.MEDIUM_DELAY);
                 }
             }
         }
@@ -651,7 +656,7 @@ export class WorkflowLoadService {
                             log(`[WorkflowPage] ❌ updateAllConnections 실패: ${error.message}`);
                             console.error(error);
                         }
-                    }, 100);
+                    }, TIMING_CONSTANTS.MEDIUM_DELAY);
                 } catch (error) {
                     log(`[WorkflowPage] ❌ setConnections 실패: ${error.message}`);
                     console.error(error);

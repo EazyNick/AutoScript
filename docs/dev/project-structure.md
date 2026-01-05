@@ -1,4 +1,4 @@
-**최신 수정일자: 2025.12.28**
+**최신 수정일자: 2026.01.05**
 
 # 프로젝트 구조
 
@@ -22,6 +22,11 @@ AutoScript/
 
 ### `server/`
 - **api/**: REST API 라우터 (`@api_handler` 데코레이터 사용)
+  - **api/helpers/**: 공통 헬퍼 함수 및 상수 (2026-01-05 추가)
+    - `script_helpers.py`: 스크립트 조회/저장 헬퍼
+    - `response_helpers.py`: 응답 생성 헬퍼
+    - `router_wrapper.py`: 라우터 래퍼 데코레이터
+    - `constants.py`: API 관련 상수 (HTTP 상태 코드, 에러 메시지, 제한값 등)
 - **nodes/**: 노드 클래스 (`BaseNode` 상속, `@NodeExecutor` 데코레이터)
   - `boundarynodes/`: 경계 노드들 (시작 노드 등)
   - `conditionnodes/`: 조건 노드들
@@ -33,6 +38,7 @@ AutoScript/
 - **services/**: 비즈니스 로직
 - **automation/**: 화면 캡처, 입력 처리, 워크플로우 실행
 - **db/**: SQLite 데이터베이스 관리
+  - `constants.py`: 데이터베이스 관련 상수 (2026-01-05 추가)
 - **execution_logging/**: 노드 실행 로그 관련 모듈 통합
   - `execution_log_client.py`: 로그 전송 클라이언트
   - `execution_log_models.py`: 로그 모델
@@ -64,6 +70,11 @@ AutoScript/
   - `modal.js`: 모달 창
   - `result-modal.js`: 실행 결과 모달
 - **pages/workflow/**: 워크플로우 편집기 및 페이지
+  - **constants/**: 워크플로우 관련 상수 (2026-01-05 추가)
+    - `timing-constants.js`: 타이밍 관련 상수
+    - `size-constants.js`: 크기 및 거리 상수
+    - `style-constants.js`: 스타일 상수
+    - `undo-redo-constants.js`: Undo/Redo 상수
   - `page-router.js`: SPA 페이지 라우팅
   - `dashboard.js`: 대시보드 페이지
   - `history.js`: 실행 기록 페이지

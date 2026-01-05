@@ -501,6 +501,53 @@ async def get_all_scripts() -> ListResponse:
         raise
 ```
 
+## 코드 모듈화 및 상수화 (2026-01-05 추가)
+
+### 헬퍼 함수 분리
+
+공통 로직을 헬퍼 함수로 분리하여 코드 중복을 제거합니다.
+
+**구현 위치**: `server/api/helpers/`
+
+```python
+# script_helpers.py
+def get_script_or_raise(script_id: int) -> dict:
+    """스크립트를 조회하고, 없으면 404 예외를 발생시킵니다."""
+    script = db_manager.get_script(script_id)
+    if not script:
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_NOT_FOUND,
+            detail=API_CONSTANTS.ERROR_SCRIPT_NOT_FOUND
+        )
+    return script
+```
+
+**효과**:
+- 코드 중복 제거
+- 유지보수성 향상
+- 일관된 에러 처리
+
+### 상수 정의
+
+하드코딩된 값들을 상수로 정의하여 유지보수성을 향상시킵니다.
+
+**구현 위치**: `server/api/helpers/constants.py`, `server/db/constants.py`
+
+```python
+class API_CONSTANTS:
+    HTTP_NOT_FOUND = 404
+    HTTP_INTERNAL_SERVER_ERROR = 500
+    DEFAULT_LOG_LIMIT = 100
+    MAX_LOG_LIMIT = 1000
+    ERROR_SCRIPT_NOT_FOUND = "스크립트를 찾을 수 없습니다."
+    # ...
+```
+
+**효과**:
+- 수치 변경 시 상수 파일만 수정하면 됨
+- 코드 일관성 향상
+- 에러 메시지 통일
+
 ## 서비스 레이어 최적화
 
 ### 리포지토리 패턴

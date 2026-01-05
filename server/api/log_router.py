@@ -5,8 +5,8 @@
 from execution_logging.execution_log_models import NodeExecutionLogRequest, NodeExecutionLogResponse
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from api.response_helpers import list_response, success_response
-from api.router_wrapper import api_handler
+from api.helpers import api_handler, list_response, success_response
+from api.helpers.constants import API_CONSTANTS
 from db.database import db_manager
 from log import log_manager
 from models.response_models import ListResponse, SuccessResponse
@@ -62,7 +62,10 @@ async def create_node_execution_log(request: NodeExecutionLogRequest, api_reques
         return NodeExecutionLogResponse(success=True, message="노드 실행 로그가 생성되었습니다.", log_id=log_id)
     except Exception as e:
         logger.error(f"[API] 노드 실행 로그 생성 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 생성 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_LOG_CREATE_FAILED}: {e!s}",
+        )
 
 
 @router.get("/node-execution", response_model=ListResponse)
@@ -72,7 +75,12 @@ async def get_node_execution_logs(
     execution_id: str | None = Query(None, description="워크플로우 실행 ID"),
     script_id: int | None = Query(None, description="스크립트 ID"),
     node_id: str | None = Query(None, description="노드 ID"),
-    limit: int = Query(100, ge=1, le=1000, description="조회할 최대 개수"),
+    limit: int = Query(
+        API_CONSTANTS.DEFAULT_LOG_LIMIT,
+        ge=API_CONSTANTS.MIN_LOG_LIMIT,
+        le=API_CONSTANTS.MAX_LOG_LIMIT,
+        description="조회할 최대 개수",
+    ),
     offset: int = Query(0, ge=0, description="건너뛸 개수"),
 ) -> ListResponse:
     """
@@ -98,7 +106,9 @@ async def get_node_execution_logs(
         return list_response(logs, "노드 실행 로그 조회 완료")
     except Exception as e:
         logger.error(f"[API] 노드 실행 로그 조회 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 조회 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR, detail=f"{API_CONSTANTS.ERROR_LOG_GET_FAILED}: {e!s}"
+        )
 
 
 @router.get("/node-execution/failed", response_model=ListResponse)
@@ -106,7 +116,12 @@ async def get_node_execution_logs(
 async def get_failed_node_execution_logs(
     http_request: Request,
     script_id: int | None = Query(None, description="스크립트 ID (선택사항)"),
-    limit: int = Query(100, ge=1, le=1000, description="조회할 최대 개수"),
+    limit: int = Query(
+        API_CONSTANTS.DEFAULT_LOG_LIMIT,
+        ge=API_CONSTANTS.MIN_LOG_LIMIT,
+        le=API_CONSTANTS.MAX_LOG_LIMIT,
+        description="조회할 최대 개수",
+    ),
 ) -> ListResponse:
     """
     실패한 노드 실행 로그를 조회합니다.
@@ -122,7 +137,9 @@ async def get_failed_node_execution_logs(
         return list_response(logs, "실패한 노드 실행 로그 조회 완료")
     except Exception as e:
         logger.error(f"[API] 실패한 노드 실행 로그 조회 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 조회 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR, detail=f"{API_CONSTANTS.ERROR_LOG_GET_FAILED}: {e!s}"
+        )
 
 
 @router.delete("/node-execution/{log_id}", response_model=SuccessResponse)
@@ -151,7 +168,10 @@ async def delete_node_execution_log(log_id: int, http_request: Request) -> Succe
         raise
     except Exception as e:
         logger.error(f"[API] 노드 실행 로그 삭제 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 삭제 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_LOG_DELETE_FAILED}: {e!s}",
+        )
 
 
 @router.delete("/node-execution/execution/{execution_id}", response_model=SuccessResponse)
@@ -178,7 +198,10 @@ async def delete_node_execution_logs_by_execution_id(execution_id: str, http_req
         )
     except Exception as e:
         logger.error(f"[API] 실행 ID별 노드 실행 로그 삭제 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 삭제 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_LOG_DELETE_FAILED}: {e!s}",
+        )
 
 
 @router.delete("/node-execution", response_model=SuccessResponse)
@@ -203,7 +226,10 @@ async def delete_all_node_execution_logs(http_request: Request) -> SuccessRespon
         )
     except Exception as e:
         logger.error(f"[API] 전체 노드 실행 로그 삭제 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 삭제 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_LOG_DELETE_FAILED}: {e!s}",
+        )
 
 
 @router.get("/node-execution/check-ready", response_model=SuccessResponse)
@@ -226,9 +252,9 @@ async def check_logs_ready(
         import asyncio
         from datetime import datetime
 
-        # 최대 10초 대기 (재시도 포함 로그 저장 완료 대기)
-        max_wait_time = 10
-        check_interval = 0.2  # 0.2초마다 확인 (더 빠른 응답)
+        # 최대 대기 시간 (재시도 포함 로그 저장 완료 대기)
+        max_wait_time = API_CONSTANTS.LOG_SAVE_CHECK_MAX_WAIT_TIME
+        check_interval = API_CONSTANTS.LOG_SAVE_CHECK_INTERVAL
         start_time = datetime.now()
         check_count = 0
 
@@ -358,4 +384,7 @@ async def check_logs_ready(
         )
     except Exception as e:
         logger.error(f"[API] 로그 저장 완료 확인 실패: {e!s}")
-        raise HTTPException(status_code=500, detail=f"로그 저장 확인 실패: {e!s}")
+        raise HTTPException(
+            status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+            detail=f"{API_CONSTANTS.ERROR_LOG_SAVE_CHECK_FAILED}: {e!s}",
+        )
