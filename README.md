@@ -7,6 +7,7 @@
 
 ## 시작하기
 
+- **[사용자 가이드](docs/USER_GUIDE.md)**: 간단한 사용 방법 안내 ⭐
 - **[설치 및 실행 가이드](INSTALLATION.md)**: 시스템 요구사항 및 설치 방법
 - **[개발 가이드](CONTRIBUTING.md)**: 개발 환경 설정 및 기여 방법
 - **[환경 변수 설정](docs/dev/environment.md)**: `.env` 파일을 통한 서버 설정 방법
