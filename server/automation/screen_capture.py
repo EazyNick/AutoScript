@@ -36,7 +36,12 @@ class ScreenCapture:
         return cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
     def find_template(
-        self, template_path: str, threshold: float = 0.7, max_attempts: int = 5, delay: float = 0.5
+        self,
+        template_path: str,
+        threshold: float = 0.7,
+        max_attempts: int | None = None,
+        delay: float = 0.5,
+        timeout: float | None = None,
     ) -> tuple[int, int, int, int] | None:
         """
         템플릿 매칭을 통해 특정 이미지를 찾습니다.
@@ -45,13 +50,35 @@ class ScreenCapture:
         Args:
             template_path: 템플릿 이미지 경로
             threshold: 매칭 임계값 (기본값 0.7, 0.8에서 낮춤)
-            max_attempts: 최대 시도 횟수 (기본값 5)
+            max_attempts: 최대 시도 횟수 (기본값: timeout이 있으면 계산, 없으면 5)
             delay: 각 시도 간 딜레이 (초, 기본값 0.5)
+            timeout: 타임아웃 시간 (초). 이 값이 지정되면 max_attempts는 무시되고
+                     timeout과 delay를 기반으로 최대 시도 횟수를 계산합니다.
+                     예: timeout=30, delay=0.5이면 최대 60회 시도 (30초 / 0.5초)
 
         Returns:
             찾은 위치 (x, y, width, height) 또는 None
         """
         import os
+
+        # 타임아웃이 지정된 경우 max_attempts 계산
+        # 기본 타임아웃: timeout이 None이고 max_attempts도 None이면
+        # 설정에서 기본 타임아웃을 가져와서 사용
+        if timeout is not None:
+            # timeout이 지정된 경우: timeout과 delay를 기반으로 max_attempts 계산
+            # 최소 1회는 시도하도록 보장
+            calculated_max_attempts = max(1, int(timeout / delay)) if delay > 0 else 1
+            max_attempts = calculated_max_attempts
+            logger.debug(
+                f"[ScreenCapture] 타임아웃 기반 시도 횟수 계산: timeout={timeout}초, delay={delay}초, max_attempts={max_attempts}"
+            )
+        elif max_attempts is None:
+            # timeout도 없고 max_attempts도 없는 경우: 기본값 5회 사용
+            max_attempts = 5
+            logger.debug(f"[ScreenCapture] 기본 max_attempts 사용: {max_attempts}")
+        else:
+            # max_attempts가 명시적으로 지정된 경우 그대로 사용
+            logger.debug(f"[ScreenCapture] 명시적 max_attempts 사용: {max_attempts}")
 
         # 경로 정규화 (Windows 경로 문제 해결)
         template_path = os.path.normpath(template_path)

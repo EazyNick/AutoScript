@@ -36,8 +36,7 @@ export class SettingsManager {
             },
             // 실행 설정
             execution: {
-                defaultTimeout: 30, // 초
-                retryCount: 3 // 회
+                scriptInterval: 0.5 // 초 (0.1초 단위)
             },
             // 스크린샷 설정
             screenshot: {
@@ -45,12 +44,6 @@ export class SettingsManager {
                 screenshotOnError: true, // 오류 시 스크린샷
                 savePath: './screenshots', // 저장 경로
                 imageFormat: 'PNG' // 'PNG', 'JPEG'
-            },
-            // 알림 설정
-            notifications: {
-                completionNotification: true, // 완료 알림
-                errorNotification: true, // 오류 알림
-                notificationSound: true // 알림 소리
             }
         };
     }
@@ -146,6 +139,17 @@ export class SettingsManager {
                     if (imageFormat !== null) {
                         this.settings.screenshot.imageFormat = imageFormat;
                     }
+
+                    // 실행 설정 로드
+                    const scriptInterval = await UserSettingsAPI.getSetting('execution.scriptInterval');
+
+                    if (scriptInterval !== null) {
+                        const intervalValue = parseFloat(scriptInterval);
+                        if (!isNaN(intervalValue) && intervalValue > 0) {
+                            this.settings.execution.scriptInterval = intervalValue;
+                        }
+                    }
+
                     logger.log('[Settings] 서버에서 설정 로드 완료');
                 }
             } catch (serverError) {
@@ -223,40 +227,20 @@ export class SettingsManager {
                     <p class="settings-section-subtitle">${t('settings.executionSubtitle')}</p>
                 </div>
                 <div class="settings-section-content">
-                    <!-- 기본 타임아웃 -->
+                    <!-- 스크립트 실행 간격 -->
                     <div class="settings-item">
                         <div class="settings-item-info">
                             <div class="settings-item-icon">⏱️</div>
                             <div class="settings-item-text">
-                                <div class="settings-item-label">${t('settings.defaultTimeout')}</div>
-                                <div class="settings-item-description">${t('settings.defaultTimeoutDescription')}</div>
+                                <div class="settings-item-label">${t('settings.scriptInterval')}</div>
+                                <div class="settings-item-description">${t('settings.scriptIntervalDescription')}</div>
                             </div>
                         </div>
                         <div class="settings-item-control">
                             <div class="slider-container">
-                                <input type="range" class="settings-slider" id="setting-timeout" min="5" max="120" value="${this.settings.execution.defaultTimeout}" />
-                                <span class="slider-value" id="timeout-value">${this.settings.execution.defaultTimeout}${t('settings.seconds')}</span>
+                                <input type="range" class="settings-slider" id="setting-script-interval" min="0.1" max="10" step="0.1" value="${this.settings.execution.scriptInterval}" />
+                                <span class="slider-value" id="script-interval-value">${this.settings.execution.scriptInterval}${t('settings.seconds')}</span>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- 재시도 횟수 -->
-                    <div class="settings-item">
-                        <div class="settings-item-info">
-                            <div class="settings-item-icon">🔄</div>
-                            <div class="settings-item-text">
-                                <div class="settings-item-label">${t('settings.retryCount')}</div>
-                                <div class="settings-item-description">${t('settings.retryCountDescription')}</div>
-                            </div>
-                        </div>
-                        <div class="settings-item-control">
-                            <select class="settings-select" id="setting-retry-count">
-                                <option value="0" ${this.settings.execution.retryCount === 0 ? 'selected' : ''}>0${t('settings.times')}</option>
-                                <option value="1" ${this.settings.execution.retryCount === 1 ? 'selected' : ''}>1${t('settings.times')}</option>
-                                <option value="2" ${this.settings.execution.retryCount === 2 ? 'selected' : ''}>2${t('settings.times')}</option>
-                                <option value="3" ${this.settings.execution.retryCount === 3 ? 'selected' : ''}>3${t('settings.times')}</option>
-                                <option value="5" ${this.settings.execution.retryCount === 5 ? 'selected' : ''}>5${t('settings.times')}</option>
-                            </select>
                         </div>
                     </div>
                 </div>
@@ -336,66 +320,6 @@ export class SettingsManager {
                 </div>
             </div>
 
-            <!-- 알림 설정 -->
-            <div class="settings-section">
-                <div class="settings-section-header">
-                    <h2 class="settings-section-title">${t('settings.notifications')}</h2>
-                    <p class="settings-section-subtitle">${t('settings.notificationsSubtitle')}</p>
-                </div>
-                <div class="settings-section-content">
-                    <!-- 완료 알림 -->
-                    <div class="settings-item">
-                        <div class="settings-item-info">
-                            <div class="settings-item-icon">🔔</div>
-                            <div class="settings-item-text">
-                                <div class="settings-item-label">${t('settings.completionNotification')}</div>
-                                <div class="settings-item-description">${t('settings.completionNotificationDescription')}</div>
-                            </div>
-                        </div>
-                        <div class="settings-item-control">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="setting-completion-notification" ${this.settings.notifications.completionNotification ? 'checked' : ''} />
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- 오류 알림 -->
-                    <div class="settings-item">
-                        <div class="settings-item-info">
-                            <div class="settings-item-icon">🔔</div>
-                            <div class="settings-item-text">
-                                <div class="settings-item-label">${t('settings.errorNotification')}</div>
-                                <div class="settings-item-description">${t('settings.errorNotificationDescription')}</div>
-                            </div>
-                        </div>
-                        <div class="settings-item-control">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="setting-error-notification" ${this.settings.notifications.errorNotification ? 'checked' : ''} />
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- 알림 소리 -->
-                    <div class="settings-item">
-                        <div class="settings-item-info">
-                            <div class="settings-item-icon">🔊</div>
-                            <div class="settings-item-text">
-                                <div class="settings-item-label">${t('settings.notificationSound')}</div>
-                                <div class="settings-item-description">${t('settings.notificationSoundDescription')}</div>
-                            </div>
-                        </div>
-                        <div class="settings-item-control">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="setting-notification-sound" ${this.settings.notifications.notificationSound ? 'checked' : ''} />
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- 키보드 단축키 -->
             <div class="settings-section">
                 <div class="settings-section-header">
@@ -456,17 +380,17 @@ export class SettingsManager {
             });
         });
 
-        // 타임아웃 슬라이더
-        const timeoutSlider = document.getElementById('setting-timeout');
-        const timeoutValue = document.getElementById('timeout-value');
-        if (timeoutSlider && timeoutValue) {
+        // 스크립트 실행 간격 슬라이더
+        const scriptIntervalSlider = document.getElementById('setting-script-interval');
+        const scriptIntervalValue = document.getElementById('script-interval-value');
+        if (scriptIntervalSlider && scriptIntervalValue) {
             // 기존 리스너 제거를 위해 새 요소로 교체
-            const newSlider = timeoutSlider.cloneNode(true);
-            timeoutSlider.parentNode.replaceChild(newSlider, timeoutSlider);
+            const newSlider = scriptIntervalSlider.cloneNode(true);
+            scriptIntervalSlider.parentNode.replaceChild(newSlider, scriptIntervalSlider);
             newSlider.addEventListener('input', (e) => {
-                const value = parseInt(e.target.value);
-                timeoutValue.textContent = `${value}${t('settings.seconds')}`;
-                this.settings.execution.defaultTimeout = value;
+                const value = parseFloat(e.target.value);
+                scriptIntervalValue.textContent = `${value}${t('settings.seconds')}`;
+                this.settings.execution.scriptInterval = value;
             });
         }
 
@@ -504,17 +428,6 @@ export class SettingsManager {
                 // 설정 페이지 다시 렌더링하여 번역 적용
                 this.renderSettings();
                 this.setupEventListeners();
-            });
-        }
-
-        // 재시도 횟수
-        const retryCount = document.getElementById('setting-retry-count');
-        if (retryCount) {
-            const newRetryCount = retryCount.cloneNode(true);
-            retryCount.parentNode.replaceChild(newRetryCount, retryCount);
-            newRetryCount.value = this.settings.execution.retryCount;
-            newRetryCount.addEventListener('change', (e) => {
-                this.settings.execution.retryCount = parseInt(e.target.value);
             });
         }
 
@@ -559,39 +472,6 @@ export class SettingsManager {
             newImageFormat.value = this.settings.screenshot.imageFormat;
             newImageFormat.addEventListener('change', (e) => {
                 this.settings.screenshot.imageFormat = e.target.value;
-            });
-        }
-
-        // 완료 알림
-        const completionNotification = document.getElementById('setting-completion-notification');
-        if (completionNotification) {
-            const newCompletionNotification = completionNotification.cloneNode(true);
-            completionNotification.parentNode.replaceChild(newCompletionNotification, completionNotification);
-            newCompletionNotification.checked = this.settings.notifications.completionNotification;
-            newCompletionNotification.addEventListener('change', (e) => {
-                this.settings.notifications.completionNotification = e.target.checked;
-            });
-        }
-
-        // 오류 알림
-        const errorNotification = document.getElementById('setting-error-notification');
-        if (errorNotification) {
-            const newErrorNotification = errorNotification.cloneNode(true);
-            errorNotification.parentNode.replaceChild(newErrorNotification, errorNotification);
-            newErrorNotification.checked = this.settings.notifications.errorNotification;
-            newErrorNotification.addEventListener('change', (e) => {
-                this.settings.notifications.errorNotification = e.target.checked;
-            });
-        }
-
-        // 알림 소리
-        const notificationSound = document.getElementById('setting-notification-sound');
-        if (notificationSound) {
-            const newNotificationSound = notificationSound.cloneNode(true);
-            notificationSound.parentNode.replaceChild(newNotificationSound, notificationSound);
-            newNotificationSound.checked = this.settings.notifications.notificationSound;
-            newNotificationSound.addEventListener('change', (e) => {
-                this.settings.notifications.notificationSound = e.target.checked;
             });
         }
     }
@@ -656,6 +536,13 @@ export class SettingsManager {
                     );
                     await UserSettingsAPI.saveSetting('screenshot.savePath', this.settings.screenshot.savePath);
                     await UserSettingsAPI.saveSetting('screenshot.imageFormat', this.settings.screenshot.imageFormat);
+
+                    // 실행 설정 저장
+                    await UserSettingsAPI.saveSetting(
+                        'execution.scriptInterval',
+                        this.settings.execution.scriptInterval.toString()
+                    );
+
                     logger.log('[Settings] 설정 서버에 저장 완료');
                 }
             } catch (serverError) {

@@ -92,7 +92,7 @@ export async function apiCall(endpoint, options = {}) {
             const errorData = await response.json().catch(() => ({ detail: response.statusText }));
             const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`;
 
-            // 404 에러 중 "찾을 수 없습니다"가 포함된 경우는 조용히 처리 (정상적인 경우)
+            // 404 에러 중 "찾을 수 없습니다"가 포함된 경우는 정보 로그로 출력 (정상적인 경우)
             // 예: 사용자 설정이 없는 경우 등
             if (
                 response.status === 404 &&
@@ -100,6 +100,7 @@ export async function apiCall(endpoint, options = {}) {
                     errorMessage.includes('Not Found') ||
                     errorData.detail?.includes('찾을 수 없습니다'))
             ) {
+                // 404는 정상적인 경우이므로 정보 로그로 출력 (에러가 아님)
                 log(`[apiCall] ⚠️ 리소스를 찾을 수 없음 (정상, 처음 사용 시): ${response.status} ${endpoint}`);
                 // 404 에러를 특별한 에러 타입으로 throw (호출자가 정상 케이스로 처리할 수 있도록)
                 const notFoundError = new Error(errorMessage);
@@ -119,9 +120,10 @@ export async function apiCall(endpoint, options = {}) {
     } catch (error) {
         const errorMessage = error.message || '';
 
-        // NotFoundError는 조용히 처리 (정상적인 경우)
+        // NotFoundError는 정보 로그로 처리 (정상적인 경우)
         // error.name이 'NotFoundError'이거나 404 에러이고 "찾을 수 없습니다"가 포함된 경우
         if (error.name === 'NotFoundError' || (error.status === 404 && errorMessage.includes('찾을 수 없습니다'))) {
+            // 404는 정상적인 경우이므로 정보 로그로 출력
             log(`[apiCall] ⚠️ 리소스를 찾을 수 없음 (정상, 처음 사용 시): ${endpoint}`);
             // NotFoundError는 그대로 throw (호출자가 정상 케이스로 처리하도록)
             throw error;

@@ -62,10 +62,13 @@ export const UserSettingsAPI = {
                 errorString.includes('404') ||
                 errorString.includes('찾을 수 없습니다')
             ) {
+                // 404는 정상적인 경우이므로 조용히 null 반환 (로그 출력 안 함)
                 return null;
             }
 
-            // 다른 에러도 폴백으로 null 반환 (로컬 스토리지 사용)
+            // 다른 에러는 로그 출력 후 null 반환 (로컬 스토리지 사용)
+            const logger = getLogger();
+            logger.error(`[UserSettingsAPI] ❌ 설정 조회 실패 - 키: ${key}`, error);
             return null;
         }
     },

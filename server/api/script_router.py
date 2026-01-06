@@ -319,16 +319,29 @@ async def execute_script(script_id: int, request: NodeExecutionRequest) -> Stand
         except Exception as e:
             logger.warning(f"[API] 스크립트 실행 기록 저장 실패 (무시): {e!s}")
 
+        # 스크립트 실행 간격 가져오기
+        import asyncio
+
+        from settings import get_execution_interval
+
+        execution_interval = get_execution_interval()
+        logger.debug(f"[API] 스크립트 실행 간격: {execution_interval}초")
+
         # 노드들 순차 실행
         results = []
         has_error = False
         error_message = None
 
-        for node in request.nodes:
+        for idx, node in enumerate(request.nodes):
             try:
                 # 실제 노드 실행 로직
                 result = await action_service.process_action(node.get("type", "unknown"), node.get("data", {}))
                 results.append(result)
+
+                # 마지막 노드가 아니면 실행 간격 대기
+                if idx < len(request.nodes) - 1 and execution_interval > 0:
+                    await asyncio.sleep(execution_interval)
+                    logger.debug(f"[API] 스크립트 실행 간격 대기 완료: {execution_interval}초")
 
             except Exception as e:
                 # 노드 실행 중 에러 발생

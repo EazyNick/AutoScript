@@ -56,16 +56,19 @@ def initialize_database() -> None:
         db_manager.init_database()  # 테이블 생성 및 마이그레이션
         logger.info("✅ 데이터베이스 테이블 생성/마이그레이션 완료")
 
+        # 스크립트 데이터 처리
+        scripts = db_manager.get_all_scripts()
+        script_count = len(scripts)
+
         if is_new_db:
             # 새 데이터베이스인 경우: 기본 데이터 삽입
             logger.info(f"새 데이터베이스 파일 생성됨: {db_path}")
             db_manager.seed_example_data(logger=logger)  # 예시 데이터 삽입
             logger.info("✅ 기본 데이터 삽입 완료")
+            scripts = db_manager.get_all_scripts()  # 생성된 스크립트 ID를 얻기 위해 재조회
         else:
-            # 기존 데이터베이스인 경우: 설정값 확인 및 추가
+            # 기존 데이터베이스인 경우: 스크립트 확인
             logger.info(f"기존 데이터베이스 파일 발견: {db_path}")
-            scripts = db_manager.get_all_scripts()
-            script_count = len(scripts)
 
             # 스크립트가 없으면 예시 데이터 생성
             if script_count == 0:
@@ -74,72 +77,81 @@ def initialize_database() -> None:
                 logger.info("✅ 예시 데이터 생성 완료")
                 scripts = db_manager.get_all_scripts()  # 생성된 스크립트 ID를 얻기 위해 재조회
 
-            # 기본 설정값 확인 및 추가
-            import json
+        # 기본 설정값 확인 및 추가 (새 DB와 기존 DB 모두에 적용)
+        import json
 
-            # 사이드바 너비 기본값 설정
-            sidebar_width = db_manager.get_user_setting("sidebar-width")
-            if sidebar_width is None:
-                db_manager.save_user_setting("sidebar-width", "300")
-                logger.info("✅ 기본 설정값 추가: sidebar-width")
+        # 사이드바 너비 기본값 설정
+        sidebar_width = db_manager.get_user_setting("sidebar-width")
+        if sidebar_width is None:
+            db_manager.save_user_setting("sidebar-width", "300")
+            logger.info("✅ 기본 설정값 추가: sidebar-width")
 
-            # 스크립트 순서 기본값 설정
-            script_order = db_manager.get_user_setting("script-order")
-            if script_order is None:
-                if len(scripts) > 0:
-                    # 기존 스크립트 ID 순서로 저장
-                    script_ids = [script["id"] for script in scripts]
-                    script_order_json = json.dumps(script_ids, ensure_ascii=False)
-                else:
-                    # 스크립트가 없으면 빈 배열
-                    script_order_json = "[]"
-                db_manager.save_user_setting("script-order", script_order_json)
-                logger.info(f"✅ 기본 설정값 추가: script-order = {script_order_json}")
+        # 스크립트 순서 기본값 설정
+        script_order = db_manager.get_user_setting("script-order")
+        if script_order is None:
+            if len(scripts) > 0:
+                # 기존 스크립트 ID 순서로 저장
+                script_ids = [script["id"] for script in scripts]
+                script_order_json = json.dumps(script_ids, ensure_ascii=False)
+            else:
+                # 스크립트가 없으면 빈 배열
+                script_order_json = "[]"
+            db_manager.save_user_setting("script-order", script_order_json)
+            logger.info(f"✅ 기본 설정값 추가: script-order = {script_order_json}")
 
-            # 스크린샷 기본 설정값 확인 및 추가
-            auto_screenshot = db_manager.get_user_setting("screenshot.autoScreenshot")
-            if auto_screenshot is None:
-                db_manager.save_user_setting("screenshot.autoScreenshot", "true")
-                logger.info("✅ 기본 설정값 추가: screenshot.autoScreenshot")
+        # 스크린샷 기본 설정값 확인 및 추가
+        auto_screenshot = db_manager.get_user_setting("screenshot.autoScreenshot")
+        if auto_screenshot is None:
+            db_manager.save_user_setting("screenshot.autoScreenshot", "true")
+            logger.info("✅ 기본 설정값 추가: screenshot.autoScreenshot")
 
-            screenshot_on_error = db_manager.get_user_setting("screenshot.screenshotOnError")
-            if screenshot_on_error is None:
-                db_manager.save_user_setting("screenshot.screenshotOnError", "true")
-                logger.info("✅ 기본 설정값 추가: screenshot.screenshotOnError")
+        screenshot_on_error = db_manager.get_user_setting("screenshot.screenshotOnError")
+        if screenshot_on_error is None:
+            db_manager.save_user_setting("screenshot.screenshotOnError", "true")
+            logger.info("✅ 기본 설정값 추가: screenshot.screenshotOnError")
 
-            screenshot_save_path = db_manager.get_user_setting("screenshot.savePath")
-            if screenshot_save_path is None:
-                db_manager.save_user_setting("screenshot.savePath", "./screenshots")
-                logger.info("✅ 기본 설정값 추가: screenshot.savePath")
+        screenshot_save_path = db_manager.get_user_setting("screenshot.savePath")
+        if screenshot_save_path is None:
+            db_manager.save_user_setting("screenshot.savePath", "./screenshots")
+            logger.info("✅ 기본 설정값 추가: screenshot.savePath")
 
-            screenshot_image_format = db_manager.get_user_setting("screenshot.imageFormat")
-            if screenshot_image_format is None:
-                db_manager.save_user_setting("screenshot.imageFormat", "PNG")
-                logger.info("✅ 기본 설정값 추가: screenshot.imageFormat")
+        screenshot_image_format = db_manager.get_user_setting("screenshot.imageFormat")
+        if screenshot_image_format is None:
+            db_manager.save_user_setting("screenshot.imageFormat", "PNG")
+            logger.info("✅ 기본 설정값 추가: screenshot.imageFormat")
 
-            # 언어 설정 기본값 확인 및 추가
-            language = db_manager.get_user_setting("language")
-            if language is None:
-                db_manager.save_user_setting("language", "en")
-                logger.info("✅ 기본 설정값 추가: language = en")
+        # 언어 설정 기본값 확인 및 추가
+        from settings import get_language
 
-            # 포커스된 스크립트 ID 기본값 확인 및 추가
-            focused_script_id = db_manager.get_user_setting("focused-script-id")
-            if focused_script_id is None:
-                if len(scripts) > 0:
-                    # 첫 번째 스크립트 ID를 기본값으로 설정
-                    first_script_id = scripts[0]["id"]
-                    db_manager.save_user_setting("focused-script-id", str(first_script_id))
-                    logger.info(f"✅ 기본 설정값 추가: focused-script-id = {first_script_id}")
-                else:
-                    # 스크립트가 없으면 빈 문자열로 설정 (나중에 스크립트가 생성되면 업데이트됨)
-                    db_manager.save_user_setting("focused-script-id", "")
-                    logger.info("✅ 기본 설정값 추가: focused-script-id = '' (스크립트 없음)")
+        language = get_language()
+        if language is None or language == "en":
+            # 설정이 없거나 기본값이면 DB에 저장
+            db_manager.save_user_setting("language", "en")
+            logger.info("✅ 기본 설정값 추가: language = en")
 
-            # 중복 설정 정리 (같은 setting_key에 대해 최신 것만 남기고 나머지 삭제)
-            deleted_count = db_manager.user_settings.cleanup_duplicate_settings()
-            if deleted_count > 0:
-                logger.info(f"✅ 중복 설정 정리 완료: {deleted_count}개 행 삭제")
+        # 실행 설정 기본값 확인 및 추가
+        script_interval = db_manager.get_user_setting("execution.scriptInterval")
+        if script_interval is None:
+            db_manager.save_user_setting("execution.scriptInterval", "0.5")
+            logger.info("✅ 기본 설정값 추가: execution.scriptInterval = 0.5")
+
+        # 포커스된 스크립트 ID 기본값 확인 및 추가
+        focused_script_id = db_manager.get_user_setting("focused-script-id")
+        if focused_script_id is None:
+            if len(scripts) > 0:
+                # 첫 번째 스크립트 ID를 기본값으로 설정
+                first_script_id = scripts[0]["id"]
+                db_manager.save_user_setting("focused-script-id", str(first_script_id))
+                logger.info(f"✅ 기본 설정값 추가: focused-script-id = {first_script_id}")
+            else:
+                # 스크립트가 없으면 빈 문자열로 설정 (나중에 스크립트가 생성되면 업데이트됨)
+                db_manager.save_user_setting("focused-script-id", "")
+                logger.info("✅ 기본 설정값 추가: focused-script-id = '' (스크립트 없음)")
+
+        # 중복 설정 정리 (같은 setting_key에 대해 최신 것만 남기고 나머지 삭제)
+        deleted_count = db_manager.user_settings.cleanup_duplicate_settings()
+        if deleted_count > 0:
+            logger.info(f"✅ 중복 설정 정리 완료: {deleted_count}개 행 삭제")
     except Exception as e:
         logger.error(f"❌ 데이터베이스 초기화 실패: {e}")
         raise e

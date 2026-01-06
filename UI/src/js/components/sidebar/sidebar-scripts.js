@@ -1011,6 +1011,27 @@ export class SidebarScriptManager {
                     executionIds.push(workflowPage.executionService.lastExecutionId);
                 }
 
+                // 마지막 스크립트가 아니면 실행 간격 대기
+                if (i < activeScripts.length - 1) {
+                    try {
+                        // 스크립트 실행 간격 설정 가져오기
+                        const scriptInterval = await UserSettingsAPI.getSetting('execution.scriptInterval');
+                        const interval = scriptInterval !== null ? parseFloat(scriptInterval) : 0.5; // 기본값 0.5초
+
+                        if (interval > 0 && !isNaN(interval)) {
+                            log(`[Scripts] 스크립트 실행 간격 대기: ${interval}초`);
+                            await new Promise((resolve) => setTimeout(resolve, interval * 1000));
+                            log('[Scripts] 스크립트 실행 간격 대기 완료');
+                        }
+                    } catch (intervalError) {
+                        logWarn(
+                            `[Scripts] 스크립트 실행 간격 설정 조회 실패 (기본값 0.5초 사용): ${intervalError.message}`
+                        );
+                        // 기본값 0.5초 사용
+                        await new Promise((resolve) => setTimeout(resolve, 500));
+                    }
+                }
+
                 // 결과 처리 및 즉시 통계 업데이트
                 if (result.success) {
                     successCount++;
@@ -1066,11 +1087,6 @@ export class SidebarScriptManager {
                         }
                         break;
                     }
-                }
-
-                // 스크립트 간 대기 시간 (선택적, 필요시 조정)
-                if (i < activeScripts.length - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
                 }
             }
 
