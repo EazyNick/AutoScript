@@ -36,7 +36,7 @@ export class SettingsManager {
             },
             // 실행 설정
             execution: {
-                scriptInterval: 0.5 // 초 (0.1초 단위)
+                scriptInterval: 0.1 // 초 (0.1초 단위)
             },
             // 스크린샷 설정
             screenshot: {

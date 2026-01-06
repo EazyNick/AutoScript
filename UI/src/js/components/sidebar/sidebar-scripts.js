@@ -17,6 +17,7 @@ import { getLogger, formatDate } from './sidebar-utils.js';
 import { getDashboardManagerInstance } from '../../../pages/workflow/dashboard.js';
 import { LogAPI } from '../../api/logapi.js';
 import { t } from '../../utils/i18n.js';
+import { getPageRouterInstance } from '../../../pages/workflow/page-router.js';
 
 /**
  * 스크립트 관리 클래스
@@ -682,6 +683,17 @@ export class SidebarScriptManager {
         log(`[Scripts] 단일 스크립트 실행 시작: ${script.name} (ID: ${script.id})`);
 
         try {
+            // 0. 워크플로우 페이지로 자동 이동 (전체 실행 중이 아닌 경우에만)
+            if (!isRunningAllScripts) {
+                const pageRouter = getPageRouterInstance();
+                if (pageRouter && pageRouter.currentPage !== 'editor') {
+                    log('[Scripts] 워크플로우 페이지로 자동 이동');
+                    pageRouter.showPage('editor');
+                    // 페이지 전환 후 로드 대기
+                    await new Promise((resolve) => setTimeout(resolve, 300));
+                }
+            }
+
             // 1. 스크립트 선택 (포커스)
             const allScripts = this.sidebarManager.scripts;
             const localIndex = allScripts.findIndex((s) => s.id === script.id);
@@ -912,6 +924,15 @@ export class SidebarScriptManager {
             this.sidebarManager.isRunningAllScripts = false;
             this.sidebarManager.setButtonsState('idle');
             return;
+        }
+
+        // 워크플로우 페이지로 자동 이동
+        const pageRouter = getPageRouterInstance();
+        if (pageRouter && pageRouter.currentPage !== 'editor') {
+            log('[Scripts] 전체 실행: 워크플로우 페이지로 자동 이동');
+            pageRouter.showPage('editor');
+            // 페이지 전환 후 로드 대기
+            await new Promise((resolve) => setTimeout(resolve, 300));
         }
 
         // 스크립트 개수 기준 카운터 (try-catch 블록 밖에서 선언)

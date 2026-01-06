@@ -132,8 +132,8 @@ def initialize_database() -> None:
         # 실행 설정 기본값 확인 및 추가
         script_interval = db_manager.get_user_setting("execution.scriptInterval")
         if script_interval is None:
-            db_manager.save_user_setting("execution.scriptInterval", "0.5")
-            logger.info("✅ 기본 설정값 추가: execution.scriptInterval = 0.5")
+            db_manager.save_user_setting("execution.scriptInterval", "0.1")
+            logger.info("✅ 기본 설정값 추가: execution.scriptInterval = 0.1")
 
         # 포커스된 스크립트 ID 기본값 확인 및 추가
         focused_script_id = db_manager.get_user_setting("focused-script-id")
