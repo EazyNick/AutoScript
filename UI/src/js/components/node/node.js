@@ -2000,10 +2000,8 @@ export class NodeManager {
             const otherHeight = otherRect.height;
 
             // 충돌 감지 (간격 포함)
-            const overlapX =
-                nodeX < otherX + otherWidth + padding && nodeX + nodeWidth + padding > otherX;
-            const overlapY =
-                nodeY < otherY + otherHeight + padding && nodeY + nodeHeight + padding > otherY;
+            const overlapX = nodeX < otherX + otherWidth + padding && nodeX + nodeWidth + padding > otherX;
+            const overlapY = nodeY < otherY + otherHeight + padding && nodeY + nodeHeight + padding > otherY;
 
             if (overlapX && overlapY) {
                 hasOverlap = true;

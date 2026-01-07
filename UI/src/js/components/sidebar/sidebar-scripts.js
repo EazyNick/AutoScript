@@ -388,6 +388,12 @@ export class SidebarScriptManager {
         // 헤더 업데이트
         this.sidebarManager.uiManager.updateHeader();
 
+        // 모달 닫기 (스크립트 변경 시 열려있는 모달 닫기)
+        const modalManager = getModalManagerInstance();
+        if (modalManager && modalManager.isOpen()) {
+            modalManager.close();
+        }
+
         // 이벤트 발생 (강제 재로드 플래그 전달)
         this.sidebarManager.dispatchScriptChangeEvent(forceReload);
 

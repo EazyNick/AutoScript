@@ -8,6 +8,7 @@ import { getDashboardManagerInstance } from './dashboard.js';
 import { getSettingsManagerInstance } from './settings.js';
 import { getHistoryManagerInstance } from './history.js';
 import { t } from '../../js/utils/i18n.js';
+import { getModalManagerInstance } from '../../js/utils/modal.js';
 
 /**
  * 로거 유틸리티 가져오기
@@ -88,6 +89,12 @@ export class PageRouter {
     showPage(pageName) {
         const logger = getLogger();
         logger.log('[PageRouter] 페이지 전환:', pageName);
+
+        // 모달 닫기 (페이지 전환 시 열려있는 모달 닫기)
+        const modalManager = getModalManagerInstance();
+        if (modalManager && modalManager.isOpen()) {
+            modalManager.close();
+        }
 
         // 모든 페이지 숨기기
         const allPages = document.querySelectorAll('.page-content');
