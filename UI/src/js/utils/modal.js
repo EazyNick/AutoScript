@@ -35,6 +35,9 @@ export class ModalManager {
         this.modalStartX = 0;
         this.modalStartY = 0;
 
+        // 모달 내부에서 시작된 클릭 추적
+        this.mouseDownInsideModal = false;
+
         this.init();
     }
 
@@ -56,11 +59,29 @@ export class ModalManager {
             }
         });
 
-        // 모달 배경 클릭으로 닫기
+        // 모달 배경 클릭으로 닫기 (드래그 중이 아니고, 모달 내부에서 시작된 클릭이 아닐 때만)
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
+            if (e.target === this.modal && !this.isDragging && !this.mouseDownInsideModal) {
                 this.close();
             }
+            // 클릭 이벤트 처리 후 플래그 리셋
+            this.mouseDownInsideModal = false;
+        });
+
+        // 모달 내부에서 mousedown 추적
+        if (this.modalContent) {
+            this.modalContent.addEventListener('mousedown', (e) => {
+                // 모달 콘텐츠 내부에서 mousedown이 시작되었음을 표시
+                this.mouseDownInsideModal = true;
+            });
+        }
+
+        // 전역 mouseup 이벤트로 모달 밖에서 mouseup 시 플래그 리셋
+        document.addEventListener('mouseup', () => {
+            // 짧은 지연 후 플래그 리셋 (클릭 이벤트가 먼저 처리되도록)
+            setTimeout(() => {
+                this.mouseDownInsideModal = false;
+            }, 0);
         });
     }
 
@@ -97,8 +118,11 @@ export class ModalManager {
         });
 
         // 드래그 종료
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
             if (this.isDragging) {
+                // 드래그 종료 직후 발생할 수 있는 클릭 이벤트를 방지하기 위해
+                // mouseup 이벤트를 stopPropagation하여 배경 클릭 이벤트가 발생하지 않도록 함
+                e.stopPropagation();
                 this.endDrag();
             }
         });
