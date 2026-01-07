@@ -1498,9 +1498,10 @@ export class WorkflowExecutionService {
         const registry = getNodeRegistry();
         const allConfigs = await registry.getAllConfigs();
 
-        // excel-로 시작하는 노드 타입들을 찾되, excel-open은 제외
+        // excel-로 시작하는 노드 타입들을 찾되, excel-open과 excel-compare는 제외
+        // excel-compare는 종합 노드로 내부에서 엑셀을 열고 닫기 때문에 검증 불필요
         const excelNodesRequiringOpen = Object.keys(allConfigs).filter(
-            (nodeType) => nodeType.startsWith('excel-') && nodeType !== 'excel-open'
+            (nodeType) => nodeType.startsWith('excel-') && nodeType !== 'excel-open' && nodeType !== 'excel-compare'
         );
 
         const nodeManager = this.workflowPage.getNodeManager();

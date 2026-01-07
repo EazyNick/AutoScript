@@ -14,6 +14,9 @@ import { generatePreviewFromSchema, collectPreviousNodeOutput } from '../config/
 export class AddNodeModal {
     constructor(workflowPage) {
         this.workflowPage = workflowPage;
+        this.arrayParameterClickHandler = null;
+        this.arrayParameterRemoveHandler = null;
+        this.arrayParameterInputHandler = null;
     }
 
     /**
@@ -325,6 +328,12 @@ export class AddNodeModal {
                             });
                         }, 50); // 지연 시간 증가
                     }
+
+                    // 배열 파라미터 이벤트 리스너 설정
+                    setTimeout(() => {
+                        this.setupArrayParameterListeners();
+                    }, 100);
+
                     return; // 파라미터 폼이 있으면 여기서 종료
                 } else {
                     // 파라미터 폼도 없고 특수 노드도 아닌 경우
@@ -446,6 +455,154 @@ export class AddNodeModal {
     }
 
     /**
+     * 배열 파라미터 이벤트 리스너 설정
+     * NodeSettingsModal과 동일한 로직 사용
+     */
+    setupArrayParameterListeners() {
+        const logger = this.workflowPage.getLogger();
+        const log = logger.log;
+
+        // 모달 컨테이너 찾기 (이벤트 위임을 위해)
+        const modalContent = document.querySelector('.modal-content') || document.body;
+
+        log('[AddNodeModal] 배열 파라미터 이벤트 리스너 설정 시작');
+
+        // 기존 이벤트 리스너 제거
+        if (this.arrayParameterClickHandler) {
+            modalContent.removeEventListener('click', this.arrayParameterClickHandler);
+        }
+        if (this.arrayParameterInputHandler) {
+            modalContent.removeEventListener('input', this.arrayParameterInputHandler);
+        }
+
+        // + 추가 버튼 클릭 이벤트 (이벤트 위임 사용)
+        this.arrayParameterClickHandler = (e) => {
+            if (e.target.classList.contains('array-item-add') || e.target.closest('.array-item-add')) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const btn = e.target.classList.contains('array-item-add')
+                    ? e.target
+                    : e.target.closest('.array-item-add');
+                const paramKey = btn.dataset.paramKey;
+                const fieldId = btn.dataset.fieldId;
+
+                log(`[AddNodeModal] 배열 항목 추가 버튼 클릭: ${paramKey}, fieldId: ${fieldId}`);
+
+                const container = document.getElementById(`${fieldId}-container`);
+
+                if (!container) {
+                    log(`[AddNodeModal] 컨테이너를 찾을 수 없음: ${fieldId}-container`);
+                    return;
+                }
+
+                // 새 항목 추가
+                const newIndex = container.querySelectorAll('.array-item-wrapper').length;
+                const newItemHtml = `
+                    <div class="array-item-wrapper" data-index="${newIndex}" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+                        <input 
+                            type="text" 
+                            id="${fieldId}-item-${newIndex}" 
+                            value="" 
+                            class="node-settings-input array-item-input"
+                            style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
+                            placeholder="열 이름 입력">
+                        <button 
+                            type="button" 
+                            class="btn btn-secondary array-item-remove"
+                            data-index="${newIndex}"
+                            style="white-space: nowrap; padding: 8px 12px; min-width: 40px;">
+                            삭제
+                        </button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', newItemHtml);
+
+                // 인덱스 재정렬
+                this.updateArrayParameterIndices(container);
+
+                // 배열 값 업데이트
+                this.updateArrayParameterValue(fieldId, container);
+
+                log(`[AddNodeModal] 배열 항목 추가 완료: ${newIndex}`);
+                return; // 추가 버튼 처리 후 종료
+            }
+
+            // 삭제 버튼 클릭 이벤트 처리
+            if (e.target.classList.contains('array-item-remove') || e.target.closest('.array-item-remove')) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const btn = e.target.classList.contains('array-item-remove')
+                    ? e.target
+                    : e.target.closest('.array-item-remove');
+                const itemWrapper = btn.closest('.array-item-wrapper');
+
+                if (itemWrapper) {
+                    const container = itemWrapper.closest('.array-items-container');
+                    itemWrapper.remove();
+                    if (container) {
+                        this.updateArrayParameterIndices(container);
+                        const fieldId = container.id.replace('-container', '');
+                        this.updateArrayParameterValue(fieldId, container);
+                        log('[AddNodeModal] 배열 항목 삭제 완료');
+                    }
+                }
+            }
+        };
+        modalContent.addEventListener('click', this.arrayParameterClickHandler);
+
+        // 입력 필드 변경 이벤트 (이벤트 위임 사용)
+        this.arrayParameterInputHandler = (e) => {
+            if (e.target.classList.contains('array-item-input')) {
+                const container = e.target.closest('.array-items-container');
+                if (container) {
+                    const fieldId = container.id.replace('-container', '');
+                    this.updateArrayParameterValue(fieldId, container);
+                }
+            }
+        };
+        modalContent.addEventListener('input', this.arrayParameterInputHandler);
+
+        log('[AddNodeModal] 배열 파라미터 이벤트 리스너 설정 완료');
+    }
+
+    /**
+     * 배열 파라미터 인덱스 재정렬
+     */
+    updateArrayParameterIndices(container) {
+        const items = container.querySelectorAll('.array-item-wrapper');
+        items.forEach((item, index) => {
+            item.dataset.index = index;
+            const input = item.querySelector('.array-item-input');
+            const removeBtn = item.querySelector('.array-item-remove');
+            if (input) {
+                const oldId = input.id;
+                const newId = oldId.replace(/-item-\d+$/, `-item-${index}`);
+                input.id = newId;
+            }
+            if (removeBtn) {
+                removeBtn.dataset.index = index;
+            }
+        });
+    }
+
+    /**
+     * 배열 파라미터 값 업데이트
+     */
+    updateArrayParameterValue(fieldId, container) {
+        const inputs = container.querySelectorAll('.array-item-input');
+        const values = Array.from(inputs)
+            .map((input) => input.value.trim())
+            .filter((value) => value !== '');
+
+        const hiddenInput = document.getElementById(fieldId);
+        if (hiddenInput) {
+            hiddenInput.value = JSON.stringify(values);
+        }
+    }
+
+    /**
      * 폴더 선택 처리
      * @param {string} fieldId - 폴더 경로 입력 필드 ID
      */
@@ -535,23 +692,66 @@ export class AddNodeModal {
                 headers: { 'Content-Type': 'application/json' }
             });
 
-            const result = await response.json();
+            // HTTP 상태 코드 확인
+            if (!response.ok) {
+                // HTTP 에러 응답 처리
+                let errorMessage = '파일 선택에 실패했습니다.';
+                try {
+                    const errorText = await response.text();
+                    // JSON 형식인지 확인
+                    if (errorText.trim().startsWith('{')) {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.message || errorData.error || errorMessage;
+                    } else {
+                        errorMessage = `서버 오류 (${response.status}): ${errorText.substring(0, 100)}`;
+                    }
+                } catch (parseError) {
+                    errorMessage = `서버 오류 (${response.status}): ${response.statusText}`;
+                }
+                console.error('[AddNodeModal] 파일 선택 HTTP 에러:', response.status, errorMessage);
+                // 사용자에게는 간단한 메시지만 표시
+                alert('파일 선택에 실패했습니다. 서버가 실행 중인지 확인하세요.');
+                return;
+            }
 
-            // 변경된 응답 형식: {success: true/false, message: "...", data: {file_path: "..."}}
+            // 응답 본문 파싱
+            let result;
+            try {
+                const responseText = await response.text();
+                if (!responseText || responseText.trim() === '') {
+                    console.warn('[AddNodeModal] 빈 응답 수신');
+                    return;
+                }
+                result = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('[AddNodeModal] JSON 파싱 실패:', parseError);
+                alert('서버 응답을 처리할 수 없습니다. 서버가 정상적으로 실행 중인지 확인하세요.');
+                return;
+            }
+
+            // 응답 처리
             if (result.success && result.data?.file_path) {
+                // 파일이 선택된 경우
                 const filePath = result.data.file_path;
                 const inputField = document.getElementById(fieldId);
                 if (inputField) {
                     inputField.value = filePath;
                 }
                 // 성공 시 팝업 표시하지 않음
-            } else if (!result.success) {
-                // 실패 시에만 팝업 표시
+            } else if (result.data?.cancelled) {
+                // 사용자가 취소한 경우 - 정상적인 동작이므로 아무것도 하지 않음
+                console.log('[AddNodeModal] 파일 선택 취소됨');
+            } else {
+                // 기타 실패 케이스
                 const errorMsg = result.message || '파일 선택에 실패했습니다.';
-                alert(errorMsg);
+                console.warn('[AddNodeModal] 파일 선택 실패:', errorMsg);
+                // 취소가 아닌 경우에만 알림 표시
+                if (!result.data?.cancelled) {
+                    alert(errorMsg);
+                }
             }
         } catch (error) {
-            console.error('파일 선택 실패:', error);
+            console.error('[AddNodeModal] 파일 선택 중 예외 발생:', error);
             alert('파일 선택에 실패했습니다. 서버가 실행 중인지 확인하세요.');
         } finally {
             btn.disabled = false;

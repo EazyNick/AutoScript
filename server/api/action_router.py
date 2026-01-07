@@ -554,6 +554,7 @@ async def select_file() -> StandardResponseType:
     file_path = filedialog.askopenfilename(
         title="파일 선택",
         filetypes=[
+            ("엑셀 파일", "*.xlsx *.xls *.xlsm"),
             ("모든 파일", "*.*"),
             ("텍스트 파일", "*.txt"),
             ("JSON 파일", "*.json"),
@@ -563,9 +564,10 @@ async def select_file() -> StandardResponseType:
 
     root.destroy()  # 루트 윈도우 제거 (리소스 정리)
 
-    # 파일이 선택되지 않았으면 에러 응답 반환
+    # 파일이 선택되지 않았으면 (사용자가 취소한 경우) 정상 응답 반환
+    # 취소는 에러가 아닌 정상적인 사용자 동작이므로 success=False로 처리
     if not file_path:
-        return error_response("파일이 선택되지 않았습니다.")
+        return success_response({"file_path": None, "cancelled": True}, "파일 선택이 취소되었습니다.")
 
     return success_response({"file_path": file_path}, "파일이 선택되었습니다.")
 
