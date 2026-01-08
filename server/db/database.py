@@ -625,10 +625,11 @@ class DatabaseManager:
             self.scripts.update_script_timestamp(script2_id)
             log_func(f"스크립트 2에 {len(script2_nodes)}개의 노드 추가 완료")
 
-            # 스크립트 3: 엑셀 테스트
-            # 엑셀 관련 노드들을 테스트하기 위한 스크립트입니다.
-            # 새로운 엑셀 노드를 추가할 때마다 이 스크립트에 노드를 추가하세요.
-            script3_id = self.scripts.create_script("엑셀 테스트", "엑셀 노드를 사용한 자동화 테스트")
+            # 스크립트 3: 엑셀 기본 작업 테스트
+            # 엑셀 열기 - 시트 선택 - 엑셀 닫기 기본 작업을 테스트하는 스크립트입니다.
+            script3_id = self.scripts.create_script(
+                "엑셀 기본 작업 테스트", "엑셀 열기, 시트 선택, 닫기 기본 작업 테스트"
+            )
             log_func(f"스크립트 3 생성: ID={script3_id}")
 
             script3_nodes = [
@@ -656,8 +657,8 @@ class DatabaseManager:
                     "position": {"x": 600.0, "y": 0.0},
                     "data": {"title": "엑셀 시트 선택"},
                     "parameters": {
-                        "execution_id": "",  # 실행 시 이전 노드 출력에서 자동으로 가져옴
-                        "sheet_name": "Sheet1",  # 시트 이름으로 선택
+                        "execution_id": "outdata.output.execution_id",
+                        "sheet_name": "Sheet1",
                         "sheet_index": None,
                     },
                     "description": "엑셀 시트 선택",
@@ -668,46 +669,71 @@ class DatabaseManager:
                     "position": {"x": 900.0, "y": 0.0},
                     "data": {"title": "엑셀 닫기"},
                     "parameters": {
-                        "execution_id": "",  # 실행 시 이전 노드 출력에서 자동으로 가져옴
-                        "save_changes": True,
+                        "execution_id": "outdata.output.execution_id",
+                        "save_changes": False,
                     },
                     "description": "엑셀 파일 닫기",
                 },
-                # TODO: 새로운 엑셀 노드를 추가할 때 여기에 노드를 추가하세요.
-                # 예시:
-                # {
-                #     "id": "node3",
-                #     "type": "excel-read-cell",  # 새로운 엑셀 노드 타입
-                #     "position": {"x": 900.0, "y": 0.0},
-                #     "data": {"title": "셀 읽기"},
-                #     "parameters": {
-                #         "sheet": "Sheet1",
-                #         "cell": "A1",
-                #     },
-                #     "description": "엑셀 셀 읽기",
-                # },
             ]
 
             script3_connections = [
                 {"from": "start", "to": "node1", "outputType": None},
                 {"from": "node1", "to": "node2", "outputType": None},
                 {"from": "node2", "to": "node3", "outputType": None},
-                # TODO: 새로운 엑셀 노드를 추가할 때 연결도 추가하세요.
-                # 예시:
-                # {"from": "node2", "to": "node3", "outputType": None},
             ]
 
             self.nodes.save_nodes(script3_id, script3_nodes, script3_connections)
             self.scripts.update_script_timestamp(script3_id)
             log_func(f"스크립트 3에 {len(script3_nodes)}개의 노드 추가 완료")
 
-            # 스크립트 4: 반복 노드 테스트
-            # 반복 노드를 사용한 자동화 테스트입니다.
-            # 반복 노드의 아래 연결점에 연결된 노드들을 지정한 횟수만큼 반복 실행합니다.
-            script4_id = self.scripts.create_script("반복 노드 테스트", "반복 노드를 사용한 자동화 테스트")
+            # 스크립트 4: 엑셀 비교 노드 테스트
+            # 엑셀 비교 노드를 사용한 자동화 테스트입니다.
+            # 엑셀 비교 노드는 엑셀 열기, 비교, 닫기를 모두 수행하는 종합 노드입니다.
+            script4_id = self.scripts.create_script("엑셀 비교 노드 테스트", "엑셀 비교 노드를 사용한 자동화 테스트")
             log_func(f"스크립트 4 생성: ID={script4_id}")
 
             script4_nodes = [
+                {
+                    "id": "start",
+                    "type": "start",
+                    "position": {"x": 0.0, "y": 0.0},
+                    "data": {"title": "시작"},
+                    "parameters": {},
+                },
+                {
+                    "id": "node1",
+                    "type": "excel-compare",
+                    "position": {"x": 300.0, "y": 0.0},
+                    "data": {"title": "엑셀 비교"},
+                    "parameters": {
+                        "source_file_path": "C:\\Users\\User\\Desktop\\source.xlsx",
+                        "target_file_path": "C:\\Users\\User\\Desktop\\target.xlsx",
+                        "source_sheet_name": "Sheet1",
+                        "target_sheet_name": "Sheet1",
+                        "visible": True,
+                        "save_changes": True,
+                        "match_columns": ["level1", "level2", "level3"],
+                        "automation_column": "자동화/n메뉴얼",
+                    },
+                    "description": "원본 엑셀의 값을 대상 엑셀에 복사 (엑셀 열기, 비교, 닫기 모두 수행)",
+                },
+            ]
+
+            script4_connections = [
+                {"from": "start", "to": "node1", "outputType": None},
+            ]
+
+            self.nodes.save_nodes(script4_id, script4_nodes, script4_connections)
+            self.scripts.update_script_timestamp(script4_id)
+            log_func(f"스크립트 4에 {len(script4_nodes)}개의 노드 추가 완료")
+
+            # 스크립트 5: 반복 노드 테스트
+            # 반복 노드를 사용한 자동화 테스트입니다.
+            # 반복 노드의 아래 연결점에 연결된 노드들을 지정한 횟수만큼 반복 실행합니다.
+            script5_id = self.scripts.create_script("반복 노드 테스트", "반복 노드를 사용한 자동화 테스트")
+            log_func(f"스크립트 5 생성: ID={script5_id}")
+
+            script5_nodes = [
                 {
                     "id": "start",
                     "type": "start",
@@ -748,15 +774,15 @@ class DatabaseManager:
                 },
             ]
 
-            script4_connections = [
+            script5_connections = [
                 {"from": "start", "to": "node1", "outputType": None},  # 시작 -> 반복 노드
                 {"from": "node1", "to": "node2", "outputType": "bottom"},  # 반복 노드(아래 연결점) -> 대기 노드
                 {"from": "node1", "to": "node3", "outputType": None},  # 반복 노드(오른쪽 출력) -> 완료 후 실행 노드
             ]
 
-            self.nodes.save_nodes(script4_id, script4_nodes, script4_connections)
-            self.scripts.update_script_timestamp(script4_id)
-            log_func(f"스크립트 4에 {len(script4_nodes)}개의 노드 추가 완료")
+            self.nodes.save_nodes(script5_id, script5_nodes, script5_connections)
+            self.scripts.update_script_timestamp(script5_id)
+            log_func(f"스크립트 5에 {len(script5_nodes)}개의 노드 추가 완료")
 
             # 사용자 설정 예시 데이터 추가
             user_settings_to_save = [
@@ -768,7 +794,7 @@ class DatabaseManager:
 
             import json
 
-            script_order = json.dumps([script1_id, script2_id, script3_id, script4_id], ensure_ascii=False)
+            script_order = json.dumps([script1_id, script2_id, script3_id, script4_id, script5_id], ensure_ascii=False)
             user_settings_to_save.append(("script-order", script_order))  # 스크립트 순서
 
             # 첫 번째 스크립트 ID를 포커스된 스크립트로 설정
@@ -790,9 +816,11 @@ class DatabaseManager:
             log_func("사용자 설정 예시 데이터 추가 완료")
 
             # 생성된 스크립트 및 노드 개수 계산
-            created_scripts = [script1_id, script2_id, script3_id, script4_id]
+            created_scripts = [script1_id, script2_id, script3_id, script4_id, script5_id]
             total_scripts = len(created_scripts)
-            total_nodes = len(script1_nodes) + len(script2_nodes) + len(script3_nodes) + len(script4_nodes)
+            total_nodes = (
+                len(script1_nodes) + len(script2_nodes) + len(script3_nodes) + len(script4_nodes) + len(script5_nodes)
+            )
 
             # 사용자 설정 개수 계산 (실제 저장된 설정 개수)
             user_settings_count = len(user_settings_to_save)

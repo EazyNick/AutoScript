@@ -40,6 +40,22 @@ class ImageTouchNode(BaseNode):
         folder_path = get_parameter(parameters, "folder_path", default="")
         logger.info(f"[ImageTouchNode] folder_path 추출 결과: {folder_path}")
 
+        # timeout: 이미지를 찾을 때까지 대기할 최대 시간 (초)
+        # 파라미터에서 timeout 추출 (없으면 None)
+        timeout_param = get_parameter(parameters, "timeout", default=None)
+        timeout = None
+        if timeout_param is not None:
+            try:
+                timeout = float(timeout_param)
+                if timeout <= 0:
+                    logger.warning(f"[ImageTouchNode] 잘못된 timeout 값: {timeout}, timeout 사용 안 함")
+                    timeout = None
+                else:
+                    logger.debug(f"[ImageTouchNode] 파라미터에서 지정된 타임아웃 사용: {timeout}초")
+            except (ValueError, TypeError):
+                logger.warning(f"[ImageTouchNode] timeout 값 변환 실패: {timeout_param}, timeout 사용 안 함")
+                timeout = None
+
         # folder_path가 없으면 실패로 반환
         if not folder_path:
             logger.error(f"[ImageTouchNode] ❌ folder_path가 없습니다! parameters 전체: {parameters}")
@@ -89,8 +105,9 @@ class ImageTouchNode(BaseNode):
                 logger.debug(f"이미지 찾기 시도 {i + 1}/{len(image_files)}: {os.path.basename(image_path)}")
 
                 # 이미지 찾기 (threshold를 0.7로 낮춤, 필요시 더 낮출 수 있음)
+                # timeout 파라미터를 전달하여 기본 타임아웃 설정 사용
                 # location: 찾은 이미지의 위치 (x, y, width, height) 또는 None
-                location = screen_capture.find_template(image_path, threshold=0.7)
+                location = screen_capture.find_template(image_path, threshold=0.7, timeout=timeout)
 
                 # 이미지를 찾았으면 터치 시도
                 if location:

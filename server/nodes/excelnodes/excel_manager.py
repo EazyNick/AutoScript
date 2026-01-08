@@ -3,12 +3,20 @@
 스크립트 실행 중 엑셀 애플리케이션과 워크북 객체를 관리합니다.
 """
 
+import asyncio
 import contextlib
+import os
+import time
 from typing import Any
 
 from log import log_manager
 
 logger = log_manager.logger
+
+try:
+    import win32com.client
+except ImportError:
+    win32com = None
 
 # 전역 엑셀 객체 저장소: {execution_id: {"excel_app": excel_app, "workbook": workbook, "file_path": file_path}}
 _excel_objects: dict[str, dict[str, Any]] = {}
@@ -143,3 +151,73 @@ def has_excel_objects(execution_id: str) -> bool:
         엑셀 객체 존재 여부
     """
     return execution_id in _excel_objects
+
+
+async def open_excel_file(
+    file_path: str,
+    visible: bool = True,
+    max_wait_time: int = 30,
+    check_interval: float = 0.1,
+) -> tuple[Any, Any]:
+    """
+    엑셀 파일을 열고 Excel 애플리케이션과 워크북 객체를 반환합니다.
+    Excel이 완전히 준비될 때까지 대기합니다.
+
+    Args:
+        file_path: 엑셀 파일 경로 (필수)
+        visible: 엑셀 창 표시 여부 (기본값: True)
+        max_wait_time: 최대 대기 시간 (초, 기본값: 30)
+        check_interval: 확인 간격 (초, 기본값: 0.1)
+
+    Returns:
+        (excel_app, workbook) 튜플
+
+    Raises:
+        ValueError: 파일 경로가 없거나 파일이 존재하지 않는 경우
+        RuntimeError: win32com이 사용 불가능하거나 Excel 열기 실패 시
+    """
+    # win32com 확인
+    if win32com is None:
+        raise RuntimeError("pywin32가 설치되어 있지 않습니다. pip install pywin32를 실행하세요.")
+
+    # 파일 경로 검증
+    if not file_path:
+        raise ValueError("엑셀 파일 경로가 필요합니다.")
+
+    # 파일 경로 정규화
+    file_path = os.path.normpath(file_path)
+
+    # 파일 존재 여부 확인
+    if not os.path.exists(file_path):
+        raise ValueError(f"파일을 찾을 수 없습니다: {file_path}")
+
+    # 파일 확장자 확인
+    if not file_path.lower().endswith((".xlsx", ".xls", ".xlsm")):
+        raise ValueError(f"지원하지 않는 파일 형식입니다: {file_path}")
+
+    # Excel 애플리케이션 객체 생성
+    excel_app = win32com.client.Dispatch("Excel.Application")
+    excel_app.Visible = bool(visible)
+
+    # 엑셀 파일 열기
+    workbook = excel_app.Workbooks.Open(file_path)
+
+    # Excel이 완전히 준비될 때까지 대기
+    start_time = time.time()
+    excel_ready = False
+
+    while (time.time() - start_time) < max_wait_time:
+        try:
+            if excel_app.Ready and workbook.Name:
+                excel_ready = True
+                break
+        except Exception:
+            pass
+        await asyncio.sleep(check_interval)
+
+    if not excel_ready:
+        logger.warning(f"[ExcelManager] Excel 준비 확인 타임아웃 - file_path: {file_path}, 하지만 계속 진행합니다.")
+    else:
+        logger.info(f"[ExcelManager] Excel 준비 완료 - file_path: {file_path}")
+
+    return excel_app, workbook

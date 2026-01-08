@@ -1,4 +1,4 @@
-**최신 수정일자: 2025.12.21**
+**최신 수정일자: 2026.01.07**
 
 # Excel 제어 기능 목록 (win32com 기반)
 
@@ -18,7 +18,12 @@
    - 시트 이름 또는 인덱스로 선택
    - 파일 경로: `server/nodes/excelnodes/excel_select_sheet.py`
 
-3. **excel-close** (엑셀 닫기)
+3. **excel-compare** (엑셀 비교)
+   - 두 개의 엑셀 파일을 비교하여 원본 엑셀의 값을 대상 엑셀에 복사
+   - 엑셀 열기, 시트 선택, 비교, 닫기를 모두 수행하는 종합 노드
+   - 파일 경로: `server/nodes/excelnodes/excel_compare.py`
+
+4. **excel-close** (엑셀 닫기)
    - 열린 Excel 파일 닫기
    - 변경사항 저장 옵션
    - 파일 경로: `server/nodes/excelnodes/excel_close.py`
@@ -366,9 +371,13 @@
    - `server/nodes/excelnodes/excel_open.py`
    - `server/nodes/excelnodes/excel_select_sheet.py`
    - `server/nodes/excelnodes/excel_close.py`
-3. **ExcelManager 사용**: `server/nodes/excelnodes/excel_manager.py`의 `get_excel_objects()` 사용
+3. **ExcelManager 사용**: `server/nodes/excelnodes/excel_manager.py`의 함수들 사용
+   - `get_excel_objects()`: 저장된 엑셀 객체 가져오기
+   - `open_excel_file()`: 엑셀 파일 열기 (공통 함수, v0.0.7 추가)
 
 ### 공통 패턴
+
+#### 기존 엑셀 객체 사용 (execution_id 기반)
 
 ```python
 from nodes.excelnodes.excel_manager import get_excel_objects
@@ -392,6 +401,24 @@ return {
 }
 ```
 
+#### 새 엑셀 파일 열기 (파일 경로 기반, v0.0.7)
+
+```python
+from nodes.excelnodes.excel_manager import open_excel_file
+
+# 공통 함수를 사용하여 엑셀 파일 열기
+try:
+    excel_app, workbook = await open_excel_file(file_path, visible=True)
+    # 작업 수행
+    # ...
+except ValueError as e:
+    # 파일 경로 검증 오류
+    return create_failed_result(...)
+except RuntimeError as e:
+    # win32com 관련 오류
+    return create_failed_result(...)
+```
+
 ---
 
 ## 참고 자료
@@ -404,5 +431,6 @@ return {
 
 ## 업데이트 이력
 
+- **2026.01.07**: 엑셀 비교 노드 추가 (종합 노드), 엑셀 열기 로직 모듈화 (`excel_manager.open_excel_file()`)
 - **2025.12.21**: 초기 문서 작성, 현재 구현된 노드 3개 정리, 가능한 모든 기능 목록 작성
 

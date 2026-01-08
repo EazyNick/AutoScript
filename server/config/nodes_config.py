@@ -444,6 +444,99 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "excel-compare": {
+        "label": "엑셀 비교 노드",
+        "title": "엑셀 비교",
+        "description": "두 개의 엑셀 파일을 비교하여 원본 엑셀의 값을 대상 엑셀에 복사합니다. 엑셀 열기, 비교, 닫기를 모두 수행하는 종합 노드입니다. 1~2행은 헤더, 3행부터 데이터입니다.",
+        "script": "excelnodes/node-excel-compare.js",
+        "is_boundary": False,
+        "category": "action",
+        "parameters": {
+            "source_file_path": {
+                "type": "string",
+                "label": "원본 엑셀 파일 경로",
+                "description": "원본 엑셀 파일의 경로를 입력하세요.",
+                "default": "",
+                "required": True,
+                "placeholder": "예: C:\\Users\\User\\Desktop\\source.xlsx",
+            },
+            "target_file_path": {
+                "type": "string",
+                "label": "대상 엑셀 파일 경로",
+                "description": "대상 엑셀 파일의 경로를 입력하세요.",
+                "default": "",
+                "required": True,
+                "placeholder": "예: C:\\Users\\User\\Desktop\\target.xlsx",
+            },
+            "source_sheet_name": {
+                "type": "string",
+                "label": "원본 엑셀 시트 이름",
+                "description": "원본 엑셀에서 사용할 시트 이름을 입력하세요.",
+                "default": "Sheet1",
+                "required": False,
+                "placeholder": "예: Sheet1",
+            },
+            "target_sheet_name": {
+                "type": "string",
+                "label": "대상 엑셀 시트 이름",
+                "description": "대상 엑셀에서 사용할 시트 이름을 입력하세요.",
+                "default": "Sheet1",
+                "required": False,
+                "placeholder": "예: Sheet1",
+            },
+            "visible": {
+                "type": "boolean",
+                "label": "엑셀 창 표시",
+                "description": "엑셀 창을 표시할지 여부입니다.",
+                "default": True,
+                "required": False,
+            },
+            "save_changes": {
+                "type": "boolean",
+                "label": "변경사항 저장",
+                "description": "대상 엑셀 파일의 변경사항을 저장할지 여부입니다.",
+                "default": True,
+                "required": False,
+            },
+            "match_columns": {
+                "type": "array",
+                "label": "비교할 열 이름",
+                "description": "행을 매칭하기 위해 사용할 열 이름들을 추가하세요. + 버튼을 눌러 여러 열을 추가할 수 있습니다.",
+                "default": ["level1"],
+                "required": True,
+                "item_type": "string",
+                "addable": True,
+            },
+            "automation_column": {
+                "type": "string",
+                "label": "자동화 메뉴얼 열 이름",
+                "description": "복사할 값을 가진 열 이름을 입력하세요.",
+                "default": "자동화/n메뉴얼",
+                "required": True,
+                "placeholder": "예: 자동화/n메뉴얼",
+            },
+        },
+        "input_schema": {
+            "action": {"type": "string", "description": "이전 노드 타입"},
+            "status": {"type": "string", "description": "이전 노드 실행 상태"},
+            "output": {"type": "any", "description": "이전 노드 출력 데이터"},
+        },
+        "output_schema": {
+            "action": {"type": "string", "description": "노드 타입"},
+            "status": {"type": "string", "description": "실행 상태 (completed/failed)"},
+            "output": {
+                "type": "object",
+                "description": "출력 데이터",
+                "properties": {
+                    "success": {"type": "boolean", "description": "성공 여부"},
+                    "matched_count": {"type": "number", "description": "매칭된 행 개수"},
+                    "updated_count": {"type": "number", "description": "업데이트된 행 개수"},
+                    "source_execution_id": {"type": "string", "description": "원본 엑셀 실행 ID"},
+                    "target_execution_id": {"type": "string", "description": "대상 엑셀 실행 ID"},
+                },
+            },
+        },
+    },
     # === UI 테스트 노드 (UI Test Node) ===
     "testUIconfig": {
         "label": "UI 테스트 노드",
@@ -497,6 +590,26 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
                 "required": False,
             },
         },
+    },
+    "test-node": {
+        "test-node": {
+            "label": "Test Node",
+            "title": "Test Node",
+            "description": "Test node",
+            "script": "node-test-node.js",
+            "category": "action",
+            "is_boundary": False,
+            "input_schema": {
+                "action": {"type": "string", "description": "이전 노드 타입"},
+                "status": {"type": "string", "description": "이전 노드 실행 상태"},
+                "output": {"type": "any", "description": "이전 노드 출력 데이터"},
+            },
+            "output_schema": {
+                "action": {"type": "string", "description": "노드 타입"},
+                "status": {"type": "string", "description": "실행 상태"},
+                "output": {"type": "any", "description": "출력 데이터"},
+            },
+        }
     },
 }
 

@@ -4,7 +4,7 @@
 노드 설정과 구현이 일치하는지 검증합니다.
 
 사용법:
-    python scripts/validate-nodes.py
+    python scripts/nodes/validate-nodes.py
 """
 
 import ast
@@ -13,8 +13,8 @@ import inspect
 from pathlib import Path
 from typing import Any
 
-# 프로젝트 루트 디렉토리
-PROJECT_ROOT = Path(__file__).parent.parent
+# 프로젝트 루트 디렉토리 (nodes -> scripts -> project_root)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVER_DIR = PROJECT_ROOT / "server"
 UI_DIR = PROJECT_ROOT / "UI"
 

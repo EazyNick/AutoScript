@@ -4,8 +4,8 @@
 생성된 노드를 안전하게 삭제하는 도구입니다.
 
 사용법:
-    python scripts/delete-node.py --name my-node
-    python scripts/delete-node.py --name my-node --force  # 확인 없이 삭제
+    python scripts/nodes/delete-node.py --name my-node
+    python scripts/nodes/delete-node.py --name my-node --force  # 확인 없이 삭제
 """
 
 import argparse
@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# 프로젝트 루트 디렉토리
-PROJECT_ROOT = Path(__file__).parent.parent
+# 프로젝트 루트 디렉토리 (nodes -> scripts -> project_root)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVER_DIR = PROJECT_ROOT / "server"
 UI_DIR = PROJECT_ROOT / "UI"
 CONFIG_FILE = SERVER_DIR / "config" / "nodes_config.py"

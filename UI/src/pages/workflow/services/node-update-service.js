@@ -330,6 +330,18 @@ export class NodeUpdateService {
         if (nodeManager.dragController) {
             nodeManager.dragController.attachNode(nodeElement);
         }
+
+        // 노드 크기 조정 후 충돌 방지 처리 (DOM 업데이트 완료 후)
+        // adjustNodeSize 내부에서 이미 preventNodeOverlap을 호출하지만,
+        // 모든 업데이트가 완료된 후 다시 한 번 확인
+        requestAnimationFrame(() => {
+            const dragController = nodeManager.workflowPage?.getNodeManager()?.dragController;
+            if (!dragController || !dragController.isDragging) {
+                if (nodeManager.preventNodeOverlap) {
+                    nodeManager.preventNodeOverlap(nodeElement);
+                }
+            }
+        });
     }
 
     /**

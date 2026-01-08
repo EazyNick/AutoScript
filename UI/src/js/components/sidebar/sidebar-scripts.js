@@ -17,6 +17,7 @@ import { getLogger, formatDate } from './sidebar-utils.js';
 import { getDashboardManagerInstance } from '../../../pages/workflow/dashboard.js';
 import { LogAPI } from '../../api/logapi.js';
 import { t } from '../../utils/i18n.js';
+import { getPageRouterInstance } from '../../../pages/workflow/page-router.js';
 
 /**
  * 스크립트 관리 클래스
@@ -387,6 +388,12 @@ export class SidebarScriptManager {
         // 헤더 업데이트
         this.sidebarManager.uiManager.updateHeader();
 
+        // 모달 닫기 (스크립트 변경 시 열려있는 모달 닫기)
+        const modalManager = getModalManagerInstance();
+        if (modalManager && modalManager.isOpen()) {
+            modalManager.close();
+        }
+
         // 이벤트 발생 (강제 재로드 플래그 전달)
         this.sidebarManager.dispatchScriptChangeEvent(forceReload);
 
@@ -682,6 +689,17 @@ export class SidebarScriptManager {
         log(`[Scripts] 단일 스크립트 실행 시작: ${script.name} (ID: ${script.id})`);
 
         try {
+            // 0. 워크플로우 페이지로 자동 이동 (전체 실행 중이 아닌 경우에만)
+            if (!isRunningAllScripts) {
+                const pageRouter = getPageRouterInstance();
+                if (pageRouter && pageRouter.currentPage !== 'editor') {
+                    log('[Scripts] 워크플로우 페이지로 자동 이동');
+                    pageRouter.showPage('editor');
+                    // 페이지 전환 후 로드 대기
+                    await new Promise((resolve) => setTimeout(resolve, 300));
+                }
+            }
+
             // 1. 스크립트 선택 (포커스)
             const allScripts = this.sidebarManager.scripts;
             const localIndex = allScripts.findIndex((s) => s.id === script.id);
@@ -914,6 +932,15 @@ export class SidebarScriptManager {
             return;
         }
 
+        // 워크플로우 페이지로 자동 이동
+        const pageRouter = getPageRouterInstance();
+        if (pageRouter && pageRouter.currentPage !== 'editor') {
+            log('[Scripts] 전체 실행: 워크플로우 페이지로 자동 이동');
+            pageRouter.showPage('editor');
+            // 페이지 전환 후 로드 대기
+            await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+
         // 스크립트 개수 기준 카운터 (try-catch 블록 밖에서 선언)
         let successCount = 0;
         let failCount = 0;
@@ -1011,6 +1038,27 @@ export class SidebarScriptManager {
                     executionIds.push(workflowPage.executionService.lastExecutionId);
                 }
 
+                // 마지막 스크립트가 아니면 실행 간격 대기
+                if (i < activeScripts.length - 1) {
+                    try {
+                        // 스크립트 실행 간격 설정 가져오기
+                        const scriptInterval = await UserSettingsAPI.getSetting('execution.scriptInterval');
+                        const interval = scriptInterval !== null ? parseFloat(scriptInterval) : 0.5; // 기본값 0.5초
+
+                        if (interval > 0 && !isNaN(interval)) {
+                            log(`[Scripts] 스크립트 실행 간격 대기: ${interval}초`);
+                            await new Promise((resolve) => setTimeout(resolve, interval * 1000));
+                            log('[Scripts] 스크립트 실행 간격 대기 완료');
+                        }
+                    } catch (intervalError) {
+                        logWarn(
+                            `[Scripts] 스크립트 실행 간격 설정 조회 실패 (기본값 0.5초 사용): ${intervalError.message}`
+                        );
+                        // 기본값 0.5초 사용
+                        await new Promise((resolve) => setTimeout(resolve, 500));
+                    }
+                }
+
                 // 결과 처리 및 즉시 통계 업데이트
                 if (result.success) {
                     successCount++;
@@ -1066,11 +1114,6 @@ export class SidebarScriptManager {
                         }
                         break;
                     }
-                }
-
-                // 스크립트 간 대기 시간 (선택적, 필요시 조정)
-                if (i < activeScripts.length - 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
                 }
             }
 

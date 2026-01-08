@@ -1941,7 +1941,100 @@ export class NodeManager {
 
             // 노드 크기 조정 후 아래 연결점 위치 업데이트
             this.adjustBottomOutputPosition(nodeElement);
+
+            // 노드 크기 조정 후 충돌 방지 처리
+            // 드래그 중이 아닐 때만 충돌 방지 작동
+            if (!this.dragController || !this.dragController.isDragging) {
+                this.preventNodeOverlap(nodeElement);
+            }
         });
+    }
+
+    /**
+     * 노드 충돌 방지 (자동 배치)
+     * 노드 크기가 변경되거나 위치가 변경될 때 다른 노드와의 충돌을 감지하고 자동으로 밀어냄
+     * @param {HTMLElement} nodeElement - 크기나 위치가 변경된 노드 요소
+     */
+    preventNodeOverlap(nodeElement) {
+        if (!nodeElement) {
+            return;
+        }
+
+        const nodeId = nodeElement.dataset.nodeId || nodeElement.id;
+        if (!nodeId) {
+            return;
+        }
+
+        // 노드의 현재 위치와 크기 가져오기
+        const nodeRect = nodeElement.getBoundingClientRect();
+        const canvasRect = this.canvas?.getBoundingClientRect();
+        if (!canvasRect) {
+            return;
+        }
+
+        // 캔버스 좌표계로 변환
+        const nodeX = parseInt(nodeElement.style.left) || 0;
+        const nodeY = parseInt(nodeElement.style.top) || 0;
+        const nodeWidth = nodeRect.width;
+        const nodeHeight = nodeRect.height;
+
+        // 충돌 감지 및 자동 배치
+        const padding = 20; // 노드 간 최소 간격 (픽셀)
+        let hasOverlap = false;
+
+        // 모든 다른 노드와 충돌 체크
+        this.nodes.forEach((nodeInfo) => {
+            if (nodeInfo.id === nodeId) {
+                return; // 자기 자신은 제외
+            }
+
+            const otherNode = nodeInfo.element;
+            if (!otherNode) {
+                return;
+            }
+
+            const otherRect = otherNode.getBoundingClientRect();
+            const otherX = parseInt(otherNode.style.left) || 0;
+            const otherY = parseInt(otherNode.style.top) || 0;
+            const otherWidth = otherRect.width;
+            const otherHeight = otherRect.height;
+
+            // 충돌 감지 (간격 포함)
+            const overlapX = nodeX < otherX + otherWidth + padding && nodeX + nodeWidth + padding > otherX;
+            const overlapY = nodeY < otherY + otherHeight + padding && nodeY + nodeHeight + padding > otherY;
+
+            if (overlapX && overlapY) {
+                hasOverlap = true;
+
+                // 충돌 방향에 따라 노드를 밀어냄
+                // 오른쪽으로 밀어내기 (기본: 오른쪽으로 이동)
+                const newX = otherX + otherWidth + padding;
+                const newY = nodeY; // Y 좌표는 유지
+
+                // 노드 위치 업데이트
+                otherNode.style.left = newX + 'px';
+                otherNode.style.top = newY + 'px';
+
+                // nodeData에도 반영
+                if (this.nodeData && this.nodeData[nodeInfo.id]) {
+                    this.nodeData[nodeInfo.id].x = newX;
+                    this.nodeData[nodeInfo.id].y = newY;
+                }
+
+                // 연결선 업데이트
+                if (this.connectionManager) {
+                    this.connectionManager.updateConnections(nodeInfo.id);
+                }
+
+                // 재귀적으로 다른 노드와의 충돌도 체크 (연쇄 반응)
+                this.preventNodeOverlap(otherNode);
+            }
+        });
+
+        // 연결선 업데이트 (변경된 노드의 연결선도 업데이트)
+        if (hasOverlap && this.connectionManager) {
+            this.connectionManager.updateConnections(nodeId);
+        }
     }
 
     /**

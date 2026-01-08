@@ -355,7 +355,8 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 
 1. **excel-open** (엑셀 열기): Excel 파일을 열고 Excel 애플리케이션 인스턴스를 생성합니다
 2. **excel-select-sheet** (엑셀 시트 선택): 열린 워크북의 특정 시트를 선택하고 활성화합니다
-3. **excel-close** (엑셀 닫기): 열린 Excel 파일을 닫고 Excel 애플리케이션을 종료합니다
+3. **excel-compare** (엑셀 비교): 두 개의 엑셀 파일을 비교하여 원본 엑셀의 값을 대상 엑셀에 복사합니다 (종합 노드)
+4. **excel-close** (엑셀 닫기): 열린 Excel 파일을 닫고 Excel 애플리케이션을 종료합니다
 
 ## 특징
 
@@ -418,7 +419,70 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 5. **동시 실행**: 같은 `execution_id`로 여러 Excel 파일을 열 수 있지만, 같은 파일을 중복으로 열면 에러가 발생할 수 있습니다
 6. **엑셀 객체 생명주기**: 엑셀 열기 노드 실행 후 엑셀 객체는 엑셀 닫기 노드가 실행될 때까지 유지됩니다. 각 노드가 별도의 API 호출로 실행되므로, 엑셀 객체는 즉시 정리되지 않습니다.
 
-## 최근 변경사항 (v0.0.6)
+### excel-compare (엑셀 비교 노드)
+
+두 개의 엑셀 파일을 비교하여 원본 엑셀의 값을 대상 엑셀에 복사하는 종합 노드입니다.
+
+**파일 위치**: `server/nodes/excelnodes/excel_compare.py`
+
+**노드 타입**: `excel-compare`
+
+**설명**: 엑셀 열기, 시트 선택, 비교, 닫기를 모두 수행하는 종합 노드입니다. 별도의 엑셀 열기/닫기 노드가 필요하지 않습니다.
+
+#### 파라미터
+
+- `source_file_path` (string, 필수): 원본 엑셀 파일 경로
+- `target_file_path` (string, 필수): 대상 엑셀 파일 경로
+- `source_sheet_name` (string, 선택, 기본값: "Sheet1"): 원본 엑셀 시트 이름
+- `target_sheet_name` (string, 선택, 기본값: "Sheet1"): 대상 엑셀 시트 이름
+- `visible` (boolean, 기본값: true): 엑셀 창 표시 여부
+- `save_changes` (boolean, 기본값: true): 변경사항 저장 여부
+- `match_columns` (array, 필수): 비교할 열 이름 배열 (기본값: ["level1"])
+- `automation_column` (string, 필수, 기본값: "자동화/n메뉴얼"): 복사할 값을 가진 열 이름
+
+#### 출력 스키마
+
+```json
+{
+  "action": "excel-compare",
+  "status": "completed",
+  "output": {
+    "success": true,
+    "matched_count": 10,
+    "updated_count": 10,
+    "source_file_path": "C:\\data\\source.xlsx",
+    "target_file_path": "C:\\data\\target.xlsx"
+  }
+}
+```
+
+#### 동작 방식
+
+1. **원본 엑셀 열기**: `source_file_path`로 원본 엑셀 파일을 엽니다
+2. **원본 시트 선택**: `source_sheet_name`으로 원본 시트를 선택합니다
+3. **대상 엑셀 열기**: `target_file_path`로 대상 엑셀 파일을 엽니다
+4. **대상 시트 선택**: `target_sheet_name`으로 대상 시트를 선택합니다
+5. **데이터 비교 및 복사**: `match_columns`로 행을 매칭하여 `automation_column` 값을 복사합니다
+6. **엑셀 닫기**: 원본 엑셀은 저장하지 않고 닫고, 대상 엑셀은 `save_changes` 옵션에 따라 저장 후 닫습니다
+
+#### 특징
+
+- **종합 노드**: 엑셀 열기부터 닫기까지 모든 작업을 한 노드에서 처리
+- **파일 경로 직접 입력**: `execution_id` 대신 파일 경로를 직접 입력
+- **UI 파일 선택 지원**: 파라미터에 파일 선택 버튼이 표시되어 PC에서 직접 선택 가능
+
+---
+
+## 최근 변경사항
+
+### v0.0.7 (2026-01-07)
+- **엑셀 비교 노드 종합 노드화**: 파라미터로 파일 경로를 받아서 내부에서 열기, 비교, 닫기를 모두 수행하도록 변경
+- **파일 선택 UI 추가**: 엑셀 비교 노드 파라미터에 파일 선택 버튼 추가
+- **경고 메시지 제거**: "엑셀 열기 노드 필요" 경고 메시지 제거
+- **엑셀 열기 로직 모듈화**: `excel_manager.open_excel_file()` 공통 함수로 엑셀 열기 로직 통합
+- **코드 중복 제거**: 엑셀 열기 노드와 엑셀 비교 노드의 중복 코드 제거
+
+### v0.0.6
 - **execution_id 연결 개선**: 엑셀 열기 노드의 출력 `execution_id`를 저장 키로 사용하여, 엑셀 시트 선택 노드에서 정확한 엑셀 객체를 찾을 수 있도록 개선
 - **엑셀 객체 생명주기 관리**: 엑셀 닫기 노드가 실행된 경우에만 엑셀 객체를 정리하도록 변경하여, 여러 노드에서 같은 엑셀 객체를 사용할 수 있도록 개선
 - **엑셀 닫기 노드 성능 개선**: Excel 종료 대기 로직을 제거하여 엑셀 닫기 노드의 응답 속도 개선

@@ -110,12 +110,15 @@ export function generateParameterInput(paramKey, paramConfig, prefix = 'node-', 
                                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; resize: vertical;">${escapeHtml(value)}</textarea>
                         `;
                 } else {
-                    // folder_path 또는 file_path 파라미터인 경우 파일/폴더 선택 버튼 추가
+                    // folder_path, file_path 또는 _file_path로 끝나는 파라미터인 경우 파일/폴더 선택 버튼 추가
+                    const paramKeyLower = paramKey.toLowerCase();
                     const isPathParameter =
-                        paramKey.toLowerCase() === 'folder_path' || paramKey.toLowerCase() === 'file_path';
+                        paramKeyLower === 'folder_path' ||
+                        paramKeyLower === 'file_path' ||
+                        paramKeyLower.endsWith('_file_path');
 
                     if (isPathParameter) {
-                        const buttonText = paramKey.toLowerCase() === 'folder_path' ? '폴더 선택' : '파일 선택';
+                        const buttonText = paramKeyLower === 'folder_path' ? '폴더 선택' : '파일 선택';
                         const buttonId = `${fieldId}-browse-btn`;
                         inputHtml = `
                                 <div style="display: flex; gap: 8px;">
@@ -277,6 +280,71 @@ export function generateParameterInput(paramKey, paramConfig, prefix = 'node-', 
             }
             break;
 
+        case 'array':
+            // 배열 타입: 동적으로 항목 추가/제거 가능
+            const itemType = paramConfig.item_type || 'string';
+            const addable = paramConfig.addable === true;
+            const arrayValue = Array.isArray(value) ? value : value ? [value] : defaultValue || [];
+
+            // 배열 항목 HTML 생성
+            const arrayItemsHtml = arrayValue
+                .map((item, index) => {
+                    const itemId = `${fieldId}-item-${index}`;
+                    return `
+                    <div class="array-item-wrapper" data-index="${index}" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+                        <input 
+                            type="text" 
+                            id="${itemId}" 
+                            value="${escapeHtml(item)}" 
+                            class="node-settings-input array-item-input"
+                            style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
+                            placeholder="열 이름 입력">
+                        ${
+                            addable || index > 0
+                                ? `
+                            <button 
+                                type="button" 
+                                class="btn btn-secondary array-item-remove"
+                                data-index="${index}"
+                                style="white-space: nowrap; padding: 8px 12px; min-width: 40px;">
+                                삭제
+                            </button>
+                        `
+                                : ''
+                        }
+                    </div>
+                `;
+                })
+                .join('');
+
+            inputHtml = `
+                <div class="array-parameter-wrapper" data-param-key="${paramKey}">
+                    <div class="array-items-container" id="${fieldId}-container">
+                        ${arrayItemsHtml}
+                    </div>
+                    ${
+                        addable
+                            ? `
+                        <button 
+                            type="button" 
+                            class="btn btn-primary array-item-add"
+                            data-param-key="${paramKey}"
+                            data-field-id="${fieldId}"
+                            style="margin-top: 8px; white-space: nowrap; padding: 8px 16px;">
+                            + 추가
+                        </button>
+                    `
+                            : ''
+                    }
+                    <input 
+                        type="hidden" 
+                        id="${fieldId}" 
+                        value='${JSON.stringify(arrayValue)}'
+                        class="array-parameter-value">
+                </div>
+            `;
+            break;
+
         case 'boolean':
             // boolean 타입은 레이블과 체크박스를 분리하여 표시
             // 설명이 있으면 설명을 먼저 표시하고, 레이블과 체크박스를 한 줄에 배치
@@ -314,9 +382,10 @@ export function generateParameterInput(paramKey, paramConfig, prefix = 'node-', 
             `;
     }
 
-    // folder_path 또는 file_path 파라미터인 경우 버튼 ID 저장 (이벤트 리스너 설정용)
+    // folder_path, file_path 또는 _file_path로 끝나는 파라미터인 경우 버튼 ID 저장 (이벤트 리스너 설정용)
+    const paramKeyLower = paramKey.toLowerCase();
     const buttonId =
-        paramKey.toLowerCase() === 'folder_path' || paramKey.toLowerCase() === 'file_path'
+        paramKeyLower === 'folder_path' || paramKeyLower === 'file_path' || paramKeyLower.endsWith('_file_path')
             ? `${fieldId}-browse-btn`
             : null;
 
@@ -424,6 +493,16 @@ export function extractParameterValues(parameters, prefix = 'node-') {
 
         // 파라미터 타입에 따라 값 추출 방법이 다름
         switch (type) {
+            case 'array':
+                // 배열 타입: hidden input에서 JSON 문자열로 저장된 값 읽기
+                try {
+                    const arrayValue = JSON.parse(fieldElement.value || '[]');
+                    value = Array.isArray(arrayValue) ? arrayValue : paramConfig.default || [];
+                } catch (e) {
+                    // JSON 파싱 실패 시 기본값 사용
+                    value = paramConfig.default || [];
+                }
+                break;
             case 'number':
                 // 숫자 타입: parseFloat로 변환, 값이 없으면 기본값 또는 0 사용
                 value = fieldElement.value ? parseFloat(fieldElement.value) : paramConfig.default || 0;
