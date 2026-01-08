@@ -4,7 +4,7 @@
 새로운 노드를 빠르게 생성하기 위한 템플릿 생성 도구입니다.
 
 사용법:
-    python scripts/create-node.py --name my-node --category action --description "내 노드 설명"
+    python scripts/nodes/create-node.py --name my-node --category action --description "내 노드 설명"
 """
 
 import argparse
@@ -13,8 +13,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-# 프로젝트 루트 디렉토리
-PROJECT_ROOT = Path(__file__).parent.parent
+# 프로젝트 루트 디렉토리 (nodes -> scripts -> project_root)
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVER_DIR = PROJECT_ROOT / "server"
 UI_DIR = PROJECT_ROOT / "UI"
 CONFIG_FILE = SERVER_DIR / "config" / "nodes_config.py"

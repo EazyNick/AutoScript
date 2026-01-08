@@ -591,6 +591,26 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "test-node": {
+        "test-node": {
+            "label": "Test Node",
+            "title": "Test Node",
+            "description": "Test node",
+            "script": "node-test-node.js",
+            "category": "action",
+            "is_boundary": False,
+            "input_schema": {
+                "action": {"type": "string", "description": "이전 노드 타입"},
+                "status": {"type": "string", "description": "이전 노드 실행 상태"},
+                "output": {"type": "any", "description": "이전 노드 출력 데이터"},
+            },
+            "output_schema": {
+                "action": {"type": "string", "description": "노드 타입"},
+                "status": {"type": "string", "description": "실행 상태"},
+                "output": {"type": "any", "description": "출력 데이터"},
+            },
+        }
+    },
 }
 
 

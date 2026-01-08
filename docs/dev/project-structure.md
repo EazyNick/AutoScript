@@ -1,4 +1,4 @@
-**최신 수정일자: 2026.01.05**
+**최신 수정일자: 2026.01.08**
 
 # 프로젝트 구조
 
@@ -10,6 +10,10 @@ AutoScript/
 ├── .gitignore             # Git 제외 파일 목록
 ├── start-server.bat       # 서버 실행 배치 파일
 ├── scripts/               # 유틸리티 스크립트
+│   ├── dev/               # 개발용 스크립트 (테스트 스크립트 생성/삭제)
+│   ├── package/           # 패키징 관련 스크립트 (스크립트 패키징/설치)
+│   ├── nodes/             # 노드 관련 스크립트 (노드 생성/삭제/검증)
+│   └── *.bat              # 배치 파일들
 ├── server/                # 백엔드 서버 코드
 ├── UI/                    # 프론트엔드 UI 코드
 ├── docs/                  # 문서
@@ -91,6 +95,22 @@ AutoScript/
   - `themes/light/`: 라이트 모드 스타일
   - `components/`: 컴포넌트별 스타일
   - `pages/workflow/`: 워크플로우 관련 페이지 스타일
+
+### `scripts/`
+- **dev/**: 개발용 스크립트
+  - `create-test-script.py`: 테스트용 스크립트 생성
+  - `delete-script.py`: 스크립트 삭제
+- **package/**: 패키징 관련 스크립트
+  - `package-script.py`: 스크립트를 ZIP 파일로 패키징
+  - `install-script.py`: ZIP 파일에서 스크립트 설치
+- **nodes/**: 노드 관련 스크립트
+  - `create-node.py`: 노드 생성
+  - `delete-node.py`: 노드 삭제
+  - `validate-nodes.py`: 노드 검증
+- **루트**: 배치 파일들 (`.bat`)
+  - `package-script.bat`, `install-script.bat`: 패키징 관련
+  - `create-test-script.bat`, `delete-script.bat`: 개발 도구
+  - `find-venv-python.bat`: 가상환경 Python 찾기
 
 ## 파일 명명 규칙
 

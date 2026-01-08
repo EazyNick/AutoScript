@@ -27,6 +27,10 @@
 
 - **[린팅 가이드](linting.md)** - 코드 린팅 및 포매팅 설정, Python/JavaScript 린팅 규칙
 
+## 스크립트 공유
+
+- **[스크립트 패키징 가이드](script-packaging-guide.md)** - 스크립트 패키징 및 설치 방법, 공유 시스템 사용법
+
 ## UI/UX 개발
 
 - **[입력/출력 미리보기](ui-ux/input-output-preview.md)** - 노드 입력/출력 미리보기 기능
