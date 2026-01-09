@@ -8,14 +8,31 @@ Python (서버)에서 커스텀 노드를 만드는 방법을 설명합니다.
 
 ## 빠른 시작
 
-새로운 노드를 추가하는 방법은 두 가지가 있습니다:
+### 1단계: 노드 생성
 
-### 방법 1: 스크립트 사용 (권장) ⚡
-
-노드 생성 스크립트를 사용하면 자동으로 템플릿 파일을 생성합니다:
+Python 스크립트를 실행하여 노드 템플릿을 자동 생성합니다:
 
 ```bash
-python scripts/create-node.py --name my-node --category action --description "내 노드 설명"
+python scripts/nodes/create-node.py --name my-node --category action --description "내 노드 설명"
+```
+
+**생성되는 파일:**
+- `server/nodes/actionnodes/my_node.py` - Python 노드 클래스
+- `UI/src/js/components/node/node-my-node.js` - JavaScript 렌더링 파일
+- `server/config/nodes_config.py` - 설정 자동 추가됨
+
+**카테고리:**
+- `action` → `server/nodes/actionnodes/`
+- `logic` → `server/nodes/conditionnodes/`
+- `wait` → `server/nodes/waitnodes/`
+- `image` → `server/nodes/imagenodes/`
+- `boundary` → `server/nodes/boundarynodes/`
+
+**새 카테고리 생성:**
+기본 카테고리 외의 이름을 입력하면 자동으로 새 카테고리 디렉토리를 생성합니다.
+```bash
+python scripts/nodes/create-node.py --name my-node --category test --description "테스트 노드"
+# → server/nodes/testnodes/ 디렉토리와 __init__.py가 자동 생성됨
 ```
 
 #### 파라미터 설명
@@ -66,25 +83,33 @@ python scripts/create-node.py --name my-node --category action --description "�
 
 ```bash
 # 기본 사용법
-python scripts/create-node.py --name file-read --category action --description "파일을 읽는 노드"
+python scripts/nodes/create-node.py --name file-read --category action --description "파일을 읽는 노드"
 
 # 라벨 지정
-python scripts/create-node.py --name file-read --category action --description "파일을 읽는 노드" --label "파일 읽기"
+python scripts/nodes/create-node.py --name file-read --category action --description "파일을 읽는 노드" --label "파일 읽기"
 
 # 파라미터 파일 포함
-python scripts/create-node.py --name file-read --category action --description "파일을 읽는 노드" --parameters parameters.json
+python scripts/nodes/create-node.py --name file-read --category action --description "파일을 읽는 노드" --parameters parameters.json
 
 # 새 카테고리 생성
-python scripts/create-node.py --name test-node --category test --description "테스트 노드"
+python scripts/nodes/create-node.py --name test-node --category test --description "테스트 노드"
 # → server/nodes/testnodes/ 디렉토리와 __init__.py가 자동 생성됨
 ```
 
-이 명령어는 다음을 자동으로 생성합니다:
-- Python 노드 클래스 파일 (`server/nodes/actionnodes/my_node.py`)
-- JavaScript 렌더링 파일 (`UI/src/js/components/node/node-my-node.js`)
-- `nodes_config.py`에 설정 **자동 추가** (수동 추가 불필요)
+### 2단계: 기능 구현
 
-> **참고**: 파일이 이미 존재하는 경우에도 스크립트는 계속 진행하여 `nodes_config.py`에 설정을 추가합니다. 기존 파일은 건너뛰고 설정만 추가됩니다.
+생성된 파일의 주석을 따라 기능을 구현하세요:
+
+1. **Python 파일** (`server/nodes/actionnodes/my_node.py`):
+   - `[SECTION 1]` 파라미터 추출
+   - `[SECTION 2]` 노드 실행 로직 구현 ← **여기에 실제 로직 작성**
+   - `[SECTION 3]` 출력 데이터 구성
+
+2. **JavaScript 파일** (`UI/src/js/components/node/node-my-node.js`):
+   - `[SECTION 1]` 파라미터 정의 및 접근 방법
+   - `[SECTION 3]` 노드 UI 렌더링 ← **필요시 커스터마이징**
+
+> **참고**: 모든 파일은 자동으로 로드됩니다. 서버 재시작 후 워크플로우에서 노드를 사용할 수 있습니다.
 
 ### 방법 2: 수동 생성
 
@@ -597,10 +622,10 @@ nodeCopy.repeat_info = {
 python scripts/delete-node.py --name my-node
 
 # 확인 없이 삭제 (주의: 되돌릴 수 없습니다)
-python scripts/delete-node.py --name my-node --force
+python scripts/nodes/delete-node.py --name my-node --force
 
 # 설정 파일은 유지하고 파일만 삭제
-python scripts/delete-node.py --name my-node --keep-config
+python scripts/nodes/delete-node.py --name my-node --keep-config
 ```
 
 이 스크립트는 다음을 삭제합니다:
@@ -619,7 +644,7 @@ python scripts/delete-node.py --name my-node --keep-config
 노드 설정과 구현이 일치하는지 검증하려면 다음 스크립트를 실행하세요:
 
 ```bash
-python scripts/validate-nodes.py
+python scripts/nodes/validate-nodes.py
 ```
 
 이 스크립트는 다음을 확인합니다:
@@ -646,9 +671,9 @@ python scripts/validate-nodes.py
 - `UI/src/js/components/node/node-process-focus.js`: 프로세스 포커스 노드 렌더링 예시
 
 ### 개발 도구
-- `scripts/create-node.py`: 노드 템플릿 생성 스크립트 (Python, JavaScript 파일 생성 및 `nodes_config.py` 자동 추가)
-- `scripts/delete-node.py`: 노드 삭제 스크립트 (파일 및 설정 자동 제거)
-- `scripts/validate-nodes.py`: 노드 검증 스크립트 (설정과 구현 일치 여부 확인)
+- `scripts/nodes/create-node.py`: 노드 템플릿 생성 스크립트 (Python, JavaScript 파일 생성 및 `nodes_config.py` 자동 추가)
+- `scripts/nodes/delete-node.py`: 노드 삭제 스크립트 (파일 및 설정 자동 제거)
+- `scripts/nodes/validate-nodes.py`: 노드 검증 스크립트 (설정과 구현 일치 여부 확인)
 
 ## 주의사항
 

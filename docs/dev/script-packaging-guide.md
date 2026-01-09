@@ -428,7 +428,7 @@ scripts\install-node.bat
 
 ### Q1: 노드를 패키징했는데 파일을 찾을 수 없다고 나옵니다.
 
-**A**: 노드가 `nodes_config.py`에 등록되어 있어야 합니다. `create-node.py` 스크립트로 생성한 노드는 자동으로 등록됩니다.
+**A**: 노드가 `nodes_config.py`에 등록되어 있어야 합니다. `scripts/nodes/create-node.py` 스크립트로 생성한 노드는 자동으로 등록됩니다.
 
 ### Q2: 노드를 설치했는데 서버에서 인식하지 못합니다.
 

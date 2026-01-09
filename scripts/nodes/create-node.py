@@ -101,41 +101,103 @@ class {class_name}(BaseNode):
             실행 결과 딕셔너리
         """
         # ============================================
-        # 예시 동작 (개발자가 확인하기 쉬운 기본 동작)
+        # [SECTION 1] 파라미터 추출 및 이전 노드 값 사용
         # ============================================
-        # 아래 코드는 테스트용 예시 동작입니다.
-        # 실제 노드 동작을 구현할 때는 이 부분을 수정하세요.
+        # 
+        # 1. 파라미터 정의 (server/config/nodes_config.py)
+        #    노드 설정에 "parameters" 섹션을 추가하면 자동으로 UI 폼이 생성됩니다.
+        #
+        #    예시:
+        #    "{node_type}": {{
+        #        "label": "{description}",
+        #        "parameters": {{
+        #            "file_path": {{
+        #                "type": "string",
+        #                "label": "파일 경로",
+        #                "description": "파일 경로를 입력하세요.",
+        #                "default": "",
+        #                "required": True
+        #            }},
+        #            "timeout": {{
+        #                "type": "number",
+        #                "label": "타임아웃 (초)",
+        #                "default": 30,
+        #                "min": 1,
+        #                "max": 300
+        #            }}
+        #        }}
+        #    }}
+        #
+        # 2. 이전 노드 출력 값 사용하기
+        #    파라미터에 "source": "previous_output" 속성을 추가하면
+        #    UI에서 이전 노드의 출력 변수를 선택할 수 있는 버튼이 자동으로 생성됩니다.
+        #
+        #    예시:
+        #    "execution_id": {{
+        #        "type": "string",
+        #        "label": "실행 ID",
+        #        "description": "이전 노드의 execution_id를 선택하거나 직접 입력하세요.",
+        #        "default": "outdata.output.execution_id",
+        #        "source": "previous_output"  # 이 속성 추가 시 변수 선택 버튼 자동 생성
+        #    }}
+        #
+        # 3. 파라미터 값 추출
+        #    parameters 딕셔너리에는 다음이 포함됩니다:
+        #    - "action": 이전 노드 타입
+        #    - "status": 이전 노드 실행 상태
+        #    - "output": 이전 노드의 출력 데이터 (dict)
+        #    - 기타 nodes_config.py에서 정의한 파라미터들
+        #
+        #    사용자가 UI에서 "outdata.output.execution_id" 같은 경로를 입력하면,
+        #    서버에서 자동으로 이전 노드의 실제 값으로 변환하여 전달합니다.
+        #    따라서 여기서는 이미 변환된 실제 값이 전달됩니다.
+        #
+        #    예시:
+        #    execution_id = get_parameter(parameters, "execution_id")
+        #    # execution_id는 실제 값 (예: "20250101-120000-abc123")
+        #    # 경로 문자열이 아닌 실제 값이 전달됨
         
-        # 실행 시작 시간 기록
-        start_time = time.time()
-        
-{param_code if param_code else "        # 파라미터 추출 (예시)"}
+{param_code if param_code else "        # 파라미터가 필요한 경우 여기에 추출 코드를 추가하세요.\n        # 예시: my_param = get_parameter(parameters, \"my_param\", default=\"default_value\")"}
         
         # ============================================
-        # TODO: 여기에 실제 노드 실행 로직을 구현하세요
+        # [SECTION 2] 노드 실행 로직 구현
         # ============================================
+        # TODO: 여기에 실제 노드의 핵심 기능을 구현하세요.
+        # 
+        # 이 섹션에서 구현해야 할 내용:
+        #   - 노드의 주요 비즈니스 로직
+        #   - 파일 읽기/쓰기, API 호출, 데이터 처리 등
+        #   - 외부 프로그램 실행, 시스템 명령 실행 등
+        #   - 필요한 경우 예외 처리 및 에러 핸들링
+        #
         # 예시:
-        # - 파일 읽기/쓰기
-        # - API 호출
-        # - 데이터 처리
-        # - 외부 프로그램 실행 등
+        #   result = some_function(param1, param2)
+        #   processed_data = process_data(result)
+        #   save_to_file(processed_data, "output.txt")
         
-        # 실행 시간 계산
-        execution_time = time.time() - start_time
+        # [구현 시작] 아래에 실제 로직을 작성하세요
+        pass  # TODO: 실제 로직 구현
+        # [구현 끝]
         
         # ============================================
-        # 예시 출력 (개발자가 확인하기 쉬운 형식)
+        # [SECTION 3] 출력 데이터 구성
         # ============================================
-        # 입력 파라미터와 실행 정보를 포함하여 반환
+        # 노드 실행 결과를 다음 노드로 전달할 데이터를 구성합니다.
+        # 반드시 다음 형식을 따라야 합니다:
+        #   {{
+        #       "action": "{node_type}",
+        #       "status": "completed" 또는 "error",
+        #       "output": {{ ... 실제 출력 데이터 ... }}
+        #   }}
+        
         output_data = {{
             "message": "{description} 노드가 성공적으로 실행되었습니다.",
-            "execution_time_seconds": round(execution_time, 3),
-            "received_parameters": {{k: v for k, v in parameters.items() if not k.startswith("_")}},
             "node_type": "{node_type}",
-            "timestamp": time.time(),
+            # TODO: 실제 실행 결과 데이터를 여기에 추가하세요
+            # 예시: "result": result, "data": processed_data
         }}
         
-        # 파라미터가 있으면 각각을 출력에 포함
+        # 파라미터가 있으면 각각을 출력에 포함 (필요한 경우)
 {chr(10).join(f'        if "{k}" in parameters:{chr(10)}            output_data["{k}"] = {k}' for k in (parameters.keys() if parameters else []))}
 
         return {{
@@ -159,12 +221,107 @@ def generate_javascript_node(node_type: str, label: str, description: str) -> st
         /**
          * 노드 내용 생성
          * @param {{Object}} nodeData - 노드 데이터
+         * 
+         * nodeData 객체 구조:
+         *   - id: 노드 고유 ID
+         *   - type: 노드 타입 ('{node_type}')
+         *   - title: 노드 제목
+         *   - description: 노드 설명
+         *   - x, y: 노드 위치 좌표
+         *   - color: 노드 색상
+         *   - [파라미터명]: nodes_config.py에서 정의한 파라미터 값들
+         *     예: nodeData.file_path, nodeData.timeout 등
          */
         renderContent(nodeData) {{
-            // 노드 아이콘은 node-icons.config.js에서 중앙 관리
+            // ============================================
+            // [SECTION 1] 파라미터 정의 및 접근 방법
+            // ============================================
+            // 
+            // 1. 파라미터 정의 (server/config/nodes_config.py)
+            //    노드 설정에 "parameters" 섹션을 추가하면 자동으로 UI 폼이 생성됩니다.
+            //
+            //    예시:
+            //    "{node_type}": {{
+            //        "label": "{label}",
+            //        "parameters": {{
+            //            "file_path": {{
+            //                "type": "string",
+            //                "label": "파일 경로",
+            //                "description": "파일 경로를 입력하세요.",
+            //                "default": "",
+            //                "required": True,
+            //                "placeholder": "예: C:\\\\path\\\\to\\\\file.txt"
+            //            }},
+            //            "timeout": {{
+            //                "type": "number",
+            //                "label": "타임아웃 (초)",
+            //                "description": "대기 시간을 입력하세요.",
+            //                "default": 30,
+            //                "min": 1,
+            //                "max": 300,
+            //                "required": False
+            //            }}
+            //        }}
+            //    }}
+            //
+            // 2. 이전 노드 출력 값 사용하기
+            //    파라미터에 "source": "previous_output" 속성을 추가하면
+            //    UI에서 이전 노드의 출력 변수를 선택할 수 있는 버튼이 자동으로 생성됩니다.
+            //
+            //    예시:
+            //    "execution_id": {{
+            //        "type": "string",
+            //        "label": "실행 ID",
+            //        "description": "이전 노드의 execution_id를 선택하거나 직접 입력하세요.",
+            //        "default": "outdata.output.execution_id",
+            //        "required": True,
+            //        "source": "previous_output"  // 이 속성 추가 시 변수 선택 버튼 자동 생성
+            //    }}
+            //
+            // 3. 파라미터 값 접근 (JavaScript)
+            //    nodeData 객체를 통해 파라미터 값에 접근할 수 있습니다.
+            //    예: const filePath = nodeData.file_path || '기본값';
+            //    예: const timeout = nodeData.timeout || 30;
+            //
+            // 4. 이전 노드 출력 값 사용 (서버 측)
+            //    사용자가 UI에서 "outdata.output.execution_id" 같은 경로를 입력하면,
+            //    서버에서 자동으로 이전 노드의 실제 값으로 변환하여 전달합니다.
+            //    Python 노드에서는 이미 변환된 실제 값이 parameters에 전달됩니다.
+            
+            // [파라미터 접근 예시]
+            // const myParam = nodeData.my_param || '기본값';
+            // const myNumber = nodeData.my_number || 0;
+            // const myBoolean = nodeData.my_boolean || false;
+            
+            // ============================================
+            // [SECTION 2] 노드 아이콘 설정
+            // ============================================
+            // 노드 아이콘은 node-icons.config.js에서 중앙 관리됩니다.
+            // 커스텀 아이콘이 필요한 경우 node-icons.config.js를 수정하세요.
             const NodeIcons = window.NodeIcons || {{}};
             const icon = NodeIcons.getIcon('{node_type}', nodeData) || NodeIcons.icons?.default || '⚙';
             
+            // ============================================
+            // [SECTION 3] 노드 UI 렌더링
+            // ============================================
+            // TODO: 노드의 시각적 표현을 커스터마이징하려면 이 부분을 수정하세요.
+            // 
+            // 기본 구조:
+            //   - node-input: 입력 포트 영역
+            //   - node-content: 노드 본문 (아이콘, 제목, 설명 등)
+            //   - node-output: 출력 포트 영역
+            //   - node-settings: 설정 버튼 (클릭 시 파라미터 설정 모달 열림)
+            //
+            // 커스터마이징 예시:
+            //   - 파라미터 값 표시: nodeData에서 파라미터 값을 읽어 화면에 표시
+            //   - 동적 스타일 적용: 파라미터 값에 따라 스타일 변경
+            //   - 조건부 렌더링: 특정 조건에 따라 다른 UI 표시
+            //
+            // 파라미터 값 표시 예시:
+            //   const filePath = nodeData.file_path || '파일 미선택';
+            //   <div class="node-description">${{this.escapeHtml(filePath)}}</div>
+            
+            // [구현 시작] 필요시 아래 HTML 템플릿을 수정하세요
             return `
                 <div class="node-input"></div>
                 <div class="node-content">
@@ -174,12 +331,32 @@ def generate_javascript_node(node_type: str, label: str, description: str) -> st
                     <div class="node-text-area">
                         <div class="node-title">${{this.escapeHtml(nodeData.title || '{label}')}}</div>
                         <div class="node-description">${{this.escapeHtml(nodeData.description || '{description}')}}</div>
+                        <!-- TODO: 파라미터 값을 표시하려면 여기에 추가하세요 -->
+                        <!-- 예시: <div class="node-param">${{this.escapeHtml(nodeData.my_param || '')}}</div> -->
                     </div>
                 </div>
                 <div class="node-output"></div>
                 <div class="node-settings" data-node-id="${{nodeData.id}}">⚙</div>
             `;
+            // [구현 끝]
         }}
+        
+        // ============================================
+        // [SECTION 4] 추가 메서드 구현 (선택사항)
+        // ============================================
+        // TODO: 노드에 추가 기능이 필요한 경우 여기에 메서드를 추가하세요.
+        //
+        // 사용 가능한 메서드 예시:
+        //   - onNodeClick(nodeData): 노드 클릭 시 동작
+        //   - onNodeDoubleClick(nodeData): 노드 더블클릭 시 동작
+        //   - validateNode(nodeData): 노드 유효성 검사
+        //   - getNodeData(nodeData): 노드 데이터 가져오기
+        //
+        // 예시:
+        //   onNodeClick(nodeData) {{
+        //       console.log('Node clicked:', nodeData);
+        //       // 커스텀 동작 구현
+        //   }}
     }});
 }})();
 '''
