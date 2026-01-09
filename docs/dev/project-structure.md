@@ -97,20 +97,21 @@ AutoScript/
   - `pages/workflow/`: 워크플로우 관련 페이지 스타일
 
 ### `scripts/`
-- **dev/**: 개발용 스크립트
-  - `create-test-script.py`: 테스트용 스크립트 생성
-  - `delete-script.py`: 스크립트 삭제
 - **package/**: 패키징 관련 스크립트
   - `package-script.py`: 스크립트를 ZIP 파일로 패키징
   - `install-script.py`: ZIP 파일에서 스크립트 설치
+  - `package-node.py`: 노드를 ZIP 파일로 패키징
+  - `install-node.py`: ZIP 파일에서 노드 설치
 - **nodes/**: 노드 관련 스크립트
-  - `create-node.py`: 노드 생성
+  - `create-node.py`: 노드 생성 (Python, JavaScript 파일 및 `nodes_config.py` 자동 추가)
   - `delete-node.py`: 노드 삭제
   - `validate-nodes.py`: 노드 검증
 - **루트**: 배치 파일들 (`.bat`)
-  - `package-script.bat`, `install-script.bat`: 패키징 관련
-  - `create-test-script.bat`, `delete-script.bat`: 개발 도구
+  - `package-script.bat`, `install-script.bat`: 스크립트 패키징 관련
+  - `package-node.bat`, `install-node.bat`: 노드 패키징 관련
+  - `create-test-node.bat`, `delete-node.bat`: 노드 개발 도구 (테스트용)
   - `find-venv-python.bat`: 가상환경 Python 찾기
+  - `lint-all.bat`: 전체 코드 린팅
 
 ## 파일 명명 규칙
 
