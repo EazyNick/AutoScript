@@ -354,7 +354,7 @@ export class PageRouter {
                 } else if (currentScript) {
                     // 스크립트 페이지로 이동할 때마다 현재 스크립트를 다시 로드 (초기화)
                     const loadService = window.workflowPage.loadService;
-                    
+
                     // 노드 레지스트리 로딩 완료 대기
                     const { getNodeRegistry } = await import('./services/node-registry.js');
                     const registry = getNodeRegistry();

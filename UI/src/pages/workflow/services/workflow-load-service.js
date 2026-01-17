@@ -73,24 +73,21 @@ export class WorkflowLoadService {
             // 이전 로드를 취소 표시
             this._cancelledLoadIds.add(this._currentLoadId);
             const previousLoadId = this._currentLoadId;
-            
+
             // 노드 제거가 완료되도록 기존 노드 강제 제거
             const nodeManager = this.workflowPage.getNodeManager();
             if (nodeManager) {
                 log('[WorkflowLoadService] 취소된 로드의 노드 제거 시작');
                 await this.clearExistingNodes(nodeManager);
             }
-            
+
             // 이전 로드가 완료될 때까지 짧게 대기
             try {
-                await Promise.race([
-                    this._currentLoadPromise,
-                    new Promise((resolve) => setTimeout(resolve, 100))
-                ]);
+                await Promise.race([this._currentLoadPromise, new Promise((resolve) => setTimeout(resolve, 100))]);
             } catch (error) {
                 // 에러는 무시 (취소된 로드의 에러)
             }
-            
+
             // 취소된 로드 ID 정리 (오래된 것만)
             if (this._cancelledLoadIds.size > 10) {
                 this._cancelledLoadIds.clear();
@@ -161,13 +158,13 @@ export class WorkflowLoadService {
         // 같은 스크립트를 다시 로드하는 경우가 아니면 기존 노드 제거
         // previousScriptId: 이전에 로드한 스크립트 ID (스크립트 변경 여부 확인용)
         const previousScriptId = this._lastLoadedScriptId;
-        
+
         // 로드가 취소되었는지 확인
         if (this._cancelledLoadIds.has(loadId)) {
             log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 전):', loadId);
             return;
         }
-        
+
         // 이전 스크립트가 있고 다른 스크립트로 변경하는 경우
         if (previousScriptId && previousScriptId !== script.id) {
             log('[WorkflowLoadService] 기존 노드 제거 시작 (스크립트 변경)');
@@ -184,7 +181,7 @@ export class WorkflowLoadService {
                 log('[WorkflowLoadService] 같은 스크립트이므로 기존 노드 제거 건너뜀');
             }
         }
-        
+
         // 로드가 취소되었는지 다시 확인 (노드 제거 후)
         if (this._cancelledLoadIds.has(loadId)) {
             log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 후):', loadId);
@@ -206,16 +203,16 @@ export class WorkflowLoadService {
                 log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 요청 전):', loadId);
                 return;
             }
-            
+
             if (ScriptAPI && script.id) {
                 const response = await ScriptAPI.getScript(script.id);
-                
+
                 // 로드가 취소되었는지 확인 (서버 응답 후)
                 if (this._cancelledLoadIds.has(loadId)) {
                     log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 응답 후):', loadId);
                     return;
                 }
-                
+
                 log('[WorkflowPage] ✅ 서버에서 스크립트 정보 받음:', response);
 
                 const nodes = response.nodes || [];
@@ -489,7 +486,7 @@ export class WorkflowLoadService {
     async renderNodes(nodes, connections, nodeManager, loadId) {
         const logger = this.workflowPage.getLogger();
         const log = logger.log;
-        
+
         // 로드가 취소되었는지 확인
         if (loadId && this._cancelledLoadIds.has(loadId)) {
             log('[WorkflowLoadService] 로드가 취소되었습니다 (renderNodes 시작):', loadId);
@@ -568,7 +565,7 @@ export class WorkflowLoadService {
                 });
                 return;
             }
-            
+
             const nodeData = filteredNodes[index];
             await this.createNodeFromServerData(nodeData, nodeManager);
 
@@ -577,7 +574,7 @@ export class WorkflowLoadService {
                 type: nodeData.type
             });
         }
-        
+
         // 모든 노드 생성 후 최종 취소 확인
         if (loadId && this._cancelledLoadIds.has(loadId)) {
             log('[WorkflowLoadService] 로드가 취소되었습니다 (모든 노드 생성 후):', loadId);
