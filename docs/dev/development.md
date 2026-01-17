@@ -51,19 +51,36 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR (기본값: INFO)
 
 ## 서버 실행
 
-### 개발 모드
+### 방법 1: 배치 파일 사용 (권장)
+
+프로젝트 루트에서:
+```bash
+start-server.bat
+```
+
+이 방법은 다음을 자동으로 처리합니다:
+- 가상환경 자동 감지 및 활성화
+- `.env` 파일 자동 읽기
+- 환경 변수 설정
+- 서버 실행
+
+### 방법 2: 수동 실행
+
+#### 개발 모드
 ```bash
 cd server
 python main.py
 # 또는
-python -m uvicorn main:app --reload
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-### 프로덕션 모드
+#### 프로덕션 모드
 ```bash
 cd server
-python -m uvicorn main:app
+python -m uvicorn main:app --host 127.0.0.1 --port 8001
 ```
+
+> **참고**: 수동 실행 시 `.env` 파일의 환경 변수는 자동으로 읽히지 않을 수 있습니다. `start-server.bat` 사용을 권장합니다.
 
 ## 코드 품질 관리
 

@@ -88,7 +88,7 @@ class ListResponse(BaseResponse):
 
 공통 응답 생성 로직을 헬퍼 함수로 분리하여 코드 중복을 제거합니다.
 
-**구현 위치**: `server/api/response_helpers.py`
+**구현 위치**: `server/api/helpers/response_helpers.py`
 
 ```python
 from models.response_models import SuccessResponse, ErrorResponse, ListResponse
@@ -99,10 +99,15 @@ def success_response(
     **kwargs: Any,
 ) -> SuccessResponse:
     """성공 응답 생성"""
-    response_data = data if isinstance(data, dict) else ({"value": data} if data is not None else None)
-    if kwargs:
-        response_data = response_data or {}
-        response_data.update(kwargs)
+    if data is None:
+        response_data = kwargs if kwargs else None
+    elif isinstance(data, dict):
+        # dict인 경우 kwargs와 병합
+        response_data = {**data, **kwargs} if kwargs else data
+    else:
+        # 단일 값이나 list인 경우 result 필드에 포함
+        response_data = {"result": data, **kwargs} if kwargs else {"result": data}
+    
     return SuccessResponse(success=True, message=message, data=response_data)
 
 def error_response(
@@ -180,13 +185,14 @@ class ScriptResponse(BaseModel):
 
 모든 API 엔드포인트에서 공통 에러 처리를 수행하는 데코레이터를 사용합니다.
 
-**구현 위치**: `server/api/router_wrapper.py`
+**구현 위치**: `server/api/helpers/router_wrapper.py`
 
 ```python
 from functools import wraps
 from typing import ParamSpec, TypeVar
 from collections.abc import Awaitable, Callable
 from fastapi import HTTPException
+from api.helpers.constants import API_CONSTANTS
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -204,8 +210,12 @@ def api_handler(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         except Exception as e:
             # 일반 예외는 로깅 후 HTTPException으로 변환
             logger.error(f"API 엔드포인트 오류 ({func.__name__}): {e}")
+            import traceback
             logger.error(f"스택 트레이스: {traceback.format_exc()}")
-            raise HTTPException(status_code=500, detail=f"서버 내부 오류: {e!s}")
+            raise HTTPException(
+                status_code=API_CONSTANTS.HTTP_INTERNAL_SERVER_ERROR,
+                detail=f"{API_CONSTANTS.ERROR_SERVER_INTERNAL_ERROR}: {e!s}"
+            )
     
     return wrapper
 ```

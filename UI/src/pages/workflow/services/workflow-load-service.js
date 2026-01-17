@@ -18,6 +18,11 @@ export class WorkflowLoadService {
         this.workflowPage = workflowPage; // WorkflowPage 인스턴스 참조
         this.isLoading = false; // 중복 로드 방지 플래그
         this._lastLoadedScriptId = null; // 마지막으로 로드한 스크립트 ID (중복 로드 방지용)
+        this._currentLoadPromise = null; // 현재 로드 중인 Promise (취소용)
+        this._currentLoadId = null; // 현재 로드 ID (취소 확인용)
+        this._loadQueue = []; // 로드 대기 큐
+        this._isProcessingQueue = false; // 큐 처리 중 플래그
+        this._cancelledLoadIds = new Set(); // 취소된 로드 ID 집합
     }
 
     /**
@@ -41,28 +46,14 @@ export class WorkflowLoadService {
      * 스크립트 데이터 로드
      * 서버에서 노드 및 연결 정보를 가져와 화면에 표시합니다.
      * @param {Object} script - 스크립트 정보 {id, name, description}
+     * @param {boolean} forceReload - 강제 재로드 여부
      */
-    async load(script) {
+    async load(script, forceReload = false) {
         const logger = this.workflowPage.getLogger();
         const log = logger.log;
         const logError = logger.error;
 
-        // 중복 로드 방지
-        // isLoading: 현재 로딩 중인지 여부 (중복 로드 방지용)
-        if (this.isLoading) {
-            log('[WorkflowLoadService] ⚠️ 이미 로딩 중입니다. 중복 로드 방지');
-            return;
-        }
-
-        // 같은 스크립트를 다시 로드하려는 경우 방지 (단, 최초 로드는 허용)
-        // _lastLoadedScriptId: 마지막으로 로드한 스크립트 ID (중복 로드 방지용)
-        if (script && script.id && this._lastLoadedScriptId === script.id) {
-            log('[WorkflowLoadService] 같은 스크립트가 이미 로드되었습니다. 중복 로드 방지:', script.id);
-            return;
-        }
-
-        log('[WorkflowLoadService] loadScriptData() 호출됨');
-        log('[WorkflowLoadService] 로드할 스크립트:', { id: script?.id, name: script?.name });
+        log('[WorkflowLoadService] load() 호출됨:', { id: script?.id, name: script?.name, forceReload });
 
         // 유효성 검사
         if (!script || !script.id) {
@@ -70,8 +61,91 @@ export class WorkflowLoadService {
             return;
         }
 
+        // 같은 스크립트를 다시 로드하려는 경우 방지 (강제 재로드가 아닌 경우에만)
+        if (!forceReload && script && script.id && this._lastLoadedScriptId === script.id) {
+            log('[WorkflowLoadService] 같은 스크립트가 이미 로드되었습니다. 중복 로드 방지:', script.id);
+            return;
+        }
+
+        // 현재 로딩 중이면 이전 로드 취소하고 새 로드 시작
+        if (this.isLoading && this._currentLoadPromise && this._currentLoadId) {
+            log('[WorkflowLoadService] 기존 로드 취소하고 새 로드 시작');
+            // 이전 로드를 취소 표시
+            this._cancelledLoadIds.add(this._currentLoadId);
+            const previousLoadId = this._currentLoadId;
+            
+            // 노드 제거가 완료되도록 기존 노드 강제 제거
+            const nodeManager = this.workflowPage.getNodeManager();
+            if (nodeManager) {
+                log('[WorkflowLoadService] 취소된 로드의 노드 제거 시작');
+                await this.clearExistingNodes(nodeManager);
+            }
+            
+            // 이전 로드가 완료될 때까지 짧게 대기
+            try {
+                await Promise.race([
+                    this._currentLoadPromise,
+                    new Promise((resolve) => setTimeout(resolve, 100))
+                ]);
+            } catch (error) {
+                // 에러는 무시 (취소된 로드의 에러)
+            }
+            
+            // 취소된 로드 ID 정리 (오래된 것만)
+            if (this._cancelledLoadIds.size > 10) {
+                this._cancelledLoadIds.clear();
+            }
+        }
+
+        // 노드 레지스트리 로딩 완료 대기
+        const registry = getNodeRegistry();
+        try {
+            log('[WorkflowLoadService] 노드 레지스트리 로딩 완료 대기...');
+            await registry.getNodeConfigs();
+            log('[WorkflowLoadService] 노드 레지스트리 로딩 완료');
+        } catch (error) {
+            logError('[WorkflowLoadService] 노드 레지스트리 로딩 실패:', error);
+            // 계속 진행 (폴백 설정 사용)
+        }
+
         // 로딩 시작
         this.isLoading = true;
+
+        // 고유 로드 ID 생성
+        const loadId = `${script.id}_${Date.now()}_${Math.random()}`;
+        this._currentLoadId = loadId;
+
+        // 현재 로드 Promise 생성 (취소 가능하도록)
+        const loadPromise = this._performLoad(script, forceReload, loadId);
+        this._currentLoadPromise = loadPromise;
+
+        try {
+            await loadPromise;
+        } finally {
+            // 로드 완료 후 정리 (현재 로드인 경우에만)
+            if (this._currentLoadId === loadId) {
+                this._currentLoadPromise = null;
+                this._currentLoadId = null;
+            }
+        }
+    }
+
+    /**
+     * 실제 로드 수행
+     * @param {Object} script - 스크립트 정보
+     * @param {boolean} forceReload - 강제 재로드 여부
+     * @param {string} loadId - 로드 ID (취소 확인용)
+     */
+    async _performLoad(script, forceReload, loadId) {
+        const logger = this.workflowPage.getLogger();
+        const log = logger.log;
+        const logError = logger.error;
+
+        // 로드가 취소되었는지 확인
+        if (this._cancelledLoadIds.has(loadId)) {
+            log('[WorkflowLoadService] 로드가 취소되었습니다:', loadId);
+            return;
+        }
 
         // 노드 로딩 오버레이 표시
         if (this.workflowPage && typeof this.workflowPage.showNodeLoading === 'function') {
@@ -87,16 +161,34 @@ export class WorkflowLoadService {
         // 같은 스크립트를 다시 로드하는 경우가 아니면 기존 노드 제거
         // previousScriptId: 이전에 로드한 스크립트 ID (스크립트 변경 여부 확인용)
         const previousScriptId = this._lastLoadedScriptId;
+        
+        // 로드가 취소되었는지 확인
+        if (this._cancelledLoadIds.has(loadId)) {
+            log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 전):', loadId);
+            return;
+        }
+        
         // 이전 스크립트가 있고 다른 스크립트로 변경하는 경우
         if (previousScriptId && previousScriptId !== script.id) {
             log('[WorkflowLoadService] 기존 노드 제거 시작 (스크립트 변경)');
-            this.clearExistingNodes(nodeManager);
+            await this.clearExistingNodes(nodeManager);
         } else if (!previousScriptId) {
             // 첫 로드인 경우 (이전 스크립트가 없음)
             log('[WorkflowLoadService] 첫 로드이므로 기존 노드 제거 건너뜀');
         } else {
-            // 같은 스크립트를 다시 로드하는 경우 (중복 로드 방지로 이미 return되었지만 안전장치)
-            log('[WorkflowLoadService] 같은 스크립트이므로 기존 노드 제거 건너뜀');
+            // 같은 스크립트를 다시 로드하는 경우 (강제 재로드)
+            if (forceReload) {
+                log('[WorkflowLoadService] 강제 재로드: 기존 노드 제거');
+                await this.clearExistingNodes(nodeManager);
+            } else {
+                log('[WorkflowLoadService] 같은 스크립트이므로 기존 노드 제거 건너뜀');
+            }
+        }
+        
+        // 로드가 취소되었는지 다시 확인 (노드 제거 후)
+        if (this._cancelledLoadIds.has(loadId)) {
+            log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 후):', loadId);
+            return;
         }
 
         // 스크립트 ID 저장 (노드 제거 후에 저장)
@@ -109,8 +201,21 @@ export class WorkflowLoadService {
         }
 
         try {
+            // 로드가 취소되었는지 확인 (서버 요청 전)
+            if (this._cancelledLoadIds.has(loadId)) {
+                log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 요청 전):', loadId);
+                return;
+            }
+            
             if (ScriptAPI && script.id) {
                 const response = await ScriptAPI.getScript(script.id);
+                
+                // 로드가 취소되었는지 확인 (서버 응답 후)
+                if (this._cancelledLoadIds.has(loadId)) {
+                    log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 응답 후):', loadId);
+                    return;
+                }
+                
                 log('[WorkflowPage] ✅ 서버에서 스크립트 정보 받음:', response);
 
                 const nodes = response.nodes || [];
@@ -138,8 +243,14 @@ export class WorkflowLoadService {
 
                     log(`[WorkflowPage] 서버 노드 확인 - 경계 노드: ${hasBoundaryNode}`);
 
+                    // 로드가 취소되었는지 확인 (노드 렌더링 전)
+                    if (this._cancelledLoadIds.has(loadId)) {
+                        log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 렌더링 전):', loadId);
+                        return;
+                    }
+
                     // 노드들을 화면에 렌더링
-                    await this.renderNodes(nodes, connections, nodeManager);
+                    await this.renderNodes(nodes, connections, nodeManager, loadId);
                 } else {
                     // 노드가 없을 때만 기본 시작 노드 생성
                     log('[WorkflowPage] 노드가 없어 기본 시작 노드 생성');
@@ -166,11 +277,23 @@ export class WorkflowLoadService {
     }
 
     /**
+     * 현재 로드 취소
+     */
+    cancelCurrentLoad() {
+        if (this.isLoading) {
+            const logger = this.workflowPage.getLogger();
+            logger.log('[WorkflowLoadService] 현재 로드 취소');
+            this._lastLoadedScriptId = null;
+        }
+    }
+
+    /**
      * 기존 노드들 제거
      * 스크립트 전환 시 화면의 모든 노드를 제거합니다.
      * @param {NodeManager} nodeManager - 노드 관리자 인스턴스
+     * @returns {Promise<void>} 노드 제거 완료 Promise
      */
-    clearExistingNodes(nodeManager) {
+    async clearExistingNodes(nodeManager) {
         const logger = this.workflowPage.getLogger();
         const log = logger.log;
 
@@ -279,6 +402,15 @@ export class WorkflowLoadService {
             log('[WorkflowPage] NodeManager.nodes 배열 초기화 완료');
         }
 
+        // DOM 업데이트 완료 대기 (노드 제거가 완전히 반영되도록)
+        await new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    resolve();
+                });
+            });
+        });
+
         log('[WorkflowPage] ✅ 기존 노드 제거 완료');
     }
 
@@ -349,10 +481,20 @@ export class WorkflowLoadService {
 
     /**
      * 노드들을 화면에 렌더링
+     * @param {Array} nodes - 노드 배열
+     * @param {Array} connections - 연결 배열
+     * @param {NodeManager} nodeManager - 노드 관리자
+     * @param {string} loadId - 로드 ID (취소 확인용)
      */
-    async renderNodes(nodes, connections, nodeManager) {
+    async renderNodes(nodes, connections, nodeManager, loadId) {
         const logger = this.workflowPage.getLogger();
         const log = logger.log;
+        
+        // 로드가 취소되었는지 확인
+        if (loadId && this._cancelledLoadIds.has(loadId)) {
+            log('[WorkflowLoadService] 로드가 취소되었습니다 (renderNodes 시작):', loadId);
+            return;
+        }
 
         log('[WorkflowPage] 노드 데이터가 있음. 화면에 그리기 시작...');
         log(
@@ -407,6 +549,26 @@ export class WorkflowLoadService {
 
         // 노드들 생성 (비동기 처리)
         for (let index = 0; index < filteredNodes.length; index++) {
+            // 각 노드 생성 전에 취소 확인
+            if (loadId && this._cancelledLoadIds.has(loadId)) {
+                log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 생성 중):', loadId);
+                // 이미 생성된 노드들 제거
+                const createdNodes = nodeManager.nodes.filter((n) => {
+                    const nodeId = n.id || n.element?.id;
+                    return filteredNodes.slice(0, index).some((nd) => nd.id === nodeId);
+                });
+                createdNodes.forEach((n) => {
+                    if (n.element) {
+                        try {
+                            nodeManager.deleteNode(n.element, true);
+                        } catch (error) {
+                            log(`[WorkflowLoadService] 노드 제거 중 오류: ${error}`);
+                        }
+                    }
+                });
+                return;
+            }
+            
             const nodeData = filteredNodes[index];
             await this.createNodeFromServerData(nodeData, nodeManager);
 
@@ -414,6 +576,26 @@ export class WorkflowLoadService {
                 id: nodeData.id,
                 type: nodeData.type
             });
+        }
+        
+        // 모든 노드 생성 후 최종 취소 확인
+        if (loadId && this._cancelledLoadIds.has(loadId)) {
+            log('[WorkflowLoadService] 로드가 취소되었습니다 (모든 노드 생성 후):', loadId);
+            // 생성된 모든 노드 제거
+            const createdNodes = nodeManager.nodes.filter((n) => {
+                const nodeId = n.id || n.element?.id;
+                return filteredNodes.some((nd) => nd.id === nodeId);
+            });
+            createdNodes.forEach((n) => {
+                if (n.element) {
+                    try {
+                        nodeManager.deleteNode(n.element, true);
+                    } catch (error) {
+                        log(`[WorkflowLoadService] 노드 제거 중 오류: ${error}`);
+                    }
+                }
+            });
+            return;
         }
 
         log('[WorkflowPage] 모든 노드 생성 완료');

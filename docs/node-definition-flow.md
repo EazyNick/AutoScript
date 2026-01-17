@@ -483,55 +483,24 @@ row = (5, "repeat_node", "repeat", 300.0, 0.0,
 }
 ```
 
-### 7.2 API → 프론트엔드 변환 (`UI/src/pages/workflow/services/workflow-load-service.js`)
+### 7.2 API → 프론트엔드 변환
 
-**메서드**: `createNodeFromServerData(nodeData, nodeManager)`
+**참고**: 스크립트 로드 및 노드 변환의 상세한 내용은 [스크립트 로드 워크플로우](../dev/scripts/script-loading-workflow.md) 문서를 참조하세요.
 
-**변환 로직**:
-```javascript
-// API에서 받은 노드 데이터
-const nodeData = {
-    id: "repeat_node",
-    type: "repeat",
-    position: { x: 300.0, y: 0.0 },
-    data: {
-        title: "반복 (3회)",
-        repeat_count: 3
-    },
-    parameters: {
-        repeat_count: 3
-    },
-    description: "반복 횟수: 3회"
-};
+**주요 메서드**: `WorkflowLoadService.createNodeFromServerData(nodeData, nodeManager)`
 
-// ↓ 변환
-
-// NodeManager 형식
-const nodeDataForManager = {
-    id: "loop_start",
-    title: "반복 시작 (3회)",
-    type: "loop",
-    x: 300.0,
-    y: 0.0,
-    action_node_type: "loop-start",
-    loop_count: 3,
-    description: "반복 횟수: 3회"
-};
-
-// nodeManager.nodeData에 저장
-nodeManager.nodeData["loop_start"] = {
-    type: "loop",
-    action_node_type: "loop-start",
-    loop_count: 3,
-    description: "반복 횟수: 3회"
-};
-```
+**변환 요약**:
+- 서버 API 응답 형식 → NodeManager 형식으로 변환
+- `node_data`, `parameters`, `description` 등을 NodeManager 형식으로 병합
+- `nodeManager.nodeData`에 저장하여 노드 상태 관리
 
 ### 7.3 화면 렌더링
 
-**메서드**: `nodeManager.createNode(nodeDataForManager)`
+**참고**: 스크립트 로드 및 노드 렌더링의 상세한 내용은 [스크립트 로드 워크플로우](../dev/scripts/script-loading-workflow.md) 문서를 참조하세요.
 
-**렌더링 과정**:
+**주요 메서드**: `nodeManager.createNode(nodeDataForManager)`
+
+**렌더링 과정 요약**:
 1. 노드 DOM 요소 생성
 2. `nodeManager.generateNodeContent(nodeData)` 호출
 3. 노드 타입별 렌더러 (`node-repeat.js` 등)에서 HTML 생성
@@ -708,9 +677,14 @@ description: "반복 횟수: 3회"
 - JavaScript: `JSON.parse()` / `JSON.stringify()`
 
 ### 10.4 노드 스크립트 로드
+
+**참고**: 노드 스크립트 동적 로드의 상세한 내용은 [스크립트 로드 워크플로우](../dev/scripts/script-loading-workflow.md) 문서를 참조하세요.
+
+**요약**:
 - 서버의 `script` 필드에 정의된 파일명으로 동적 로드
 - 경로: `/static/js/components/node/{script}`
 - 예: `node-repeat.js` → `/static/js/components/node/node-repeat.js`
+- `NodeRegistry.loadNodeScript()` 메서드를 통해 자동 로드
 
 ---
 

@@ -23,15 +23,16 @@
   - `not_contains`: 문자열 미포함 여부
   - `greater_than`: 값이 더 큼
   - `less_than`: 값이 더 작음
-  - `greater_than_or_equal`: 값이 크거나 같음
-  - `less_than_or_equal`: 값이 작거나 같음
+- `greater_or_equal`: 값이 크거나 같음
+- `less_or_equal`: 값이 작거나 같음
   - `is_empty`: 값이 비어있음
   - `is_not_empty`: 값이 비어있지 않음
 - `field_path` (string, 기본값: ""): 이전 노드 출력에서 비교할 필드 경로 (예: "output.value", "output.status")
   - 빈 문자열이면 전체 출력을 비교합니다
   - 점(.)으로 구분하여 중첩된 필드에 접근할 수 있습니다
 - `compare_value` (any, 기본값: ""): 비교할 값
-- `previous_output` (object, 자동 주입): 이전 노드의 출력 (자동으로 주입됨)
+
+> **참고**: `previous_output`는 파라미터가 아닙니다. 시스템에서 자동으로 이전 노드의 출력을 주입합니다.
 
 #### 출력 스키마
 
@@ -48,6 +49,13 @@
   }
 }
 ```
+
+**출력 필드 설명:**
+- `result`: 조건 평가 결과 (boolean, `true` 또는 `false`)
+- `condition_type`: 사용된 조건 타입 (string)
+- `field_path`: 사용된 필드 경로 (string, 빈 문자열이면 전체 출력 사용)
+- `compare_value`: 비교한 값 (any)
+- `actual_value`: 실제 비교된 값 (any, 필드 경로로 추출한 값 또는 전체 출력)
 
 #### 동작 방식
 
@@ -129,8 +137,10 @@
 | `not_contains` | 문자열 미포함 여부 | `"hello".not_contains("world")` → `true` |
 | `greater_than` | 값이 더 큼 | `10 > 5` → `true` |
 | `less_than` | 값이 더 작음 | `5 < 10` → `true` |
-| `greater_than_or_equal` | 값이 크거나 같음 | `10 >= 10` → `true` |
-| `less_than_or_equal` | 값이 작거나 같음 | `5 <= 10` → `true` |
+| `greater_or_equal` | 값이 크거나 같음 | `10 >= 10` → `true` |
+| `less_or_equal` | 값이 작거나 같음 | `5 <= 10` → `true` |
+
+> **참고**: `nodes_config.py`에서는 `greater_or_equal`과 `less_or_equal`로 정의되어 있지만, 실제 코드에서는 동일하게 동작합니다.
 | `is_empty` | 값이 비어있음 | `""`, `[]`, `{}`, `None` → `true` |
 | `is_not_empty` | 값이 비어있지 않음 | `"hello"`, `[1]`, `{key: value}` → `true` |
 

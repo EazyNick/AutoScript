@@ -44,16 +44,18 @@ db.seed_example_data(logger)
 
 ### 자식 테이블 (외래키로 `scripts` 참조)
 2. **nodes**: 노드 정보 및 연결 관계 (`script_id` → `scripts.id`)
-3. **script_executions**: 스크립트 실행 기록 (`script_id` → `scripts.id`)
-4. **script_tags**: 스크립트-태그 관계 (`script_id` → `scripts.id`, `tag_id` → `tags.id`)
+3. **node_execution_logs**: 노드 실행 로그 (`script_id` → `scripts.id`)
+4. **script_executions**: 스크립트 실행 기록 (`script_id` → `scripts.id`)
+5. **script_tags**: 스크립트-태그 관계 (`script_id` → `scripts.id`, `tag_id` → `tags.id`)
 
 ### 독립 테이블
-5. **tags**: 태그 정보 (독립, `script_tags`를 통해 `scripts`와 연결)
-6. **user_settings**: 사용자 설정 (키-값 쌍, 다중 사용자 지원)
-7. **dashboard_stats**: 대시보드 통계 데이터
+6. **tags**: 태그 정보 (독립, `script_tags`를 통해 `scripts`와 연결)
+7. **user_settings**: 사용자 설정 (키-값 쌍, 다중 사용자 지원)
+8. **dashboard_stats**: 대시보드 통계 데이터
+9. **log_stats**: 로그 통계 데이터 (실행 기록 페이지 통계)
 
 ### 외래키 구조
-- **부모 → 자식**: `scripts` (부모) → `nodes`, `script_executions`, `script_tags` (자식)
+- **부모 → 자식**: `scripts` (부모) → `nodes`, `node_execution_logs`, `script_executions`, `script_tags` (자식)
 - **CASCADE DELETE**: 부모 레코드 삭제 시 자식 레코드도 자동 삭제
 - **외래키 제약조건**: 모든 연결에서 자동 활성화 (`PRAGMA foreign_keys = ON`)
 
@@ -70,7 +72,10 @@ from server.db.database import DatabaseManager
 
 # 데이터베이스 초기화 (테이블 생성 및 마이그레이션)
 db = DatabaseManager()
+db.init_database()  # 테이블 생성 및 마이그레이션 실행
 ```
+
+> **참고**: 실제 서버 실행 시에는 `main.py`의 `startup_event`에서 자동으로 `init_database()`가 호출됩니다.
 
 ### 스크립트 생성 및 조회
 

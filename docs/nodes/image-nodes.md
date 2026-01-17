@@ -17,7 +17,11 @@
 #### 파라미터
 
 - `folder_path` (string, 필수): 이미지 파일이 있는 폴더 경로
-- `timeout` (number, 기본값: 30): 이미지를 찾을 때까지 대기할 최대 시간 (초)
+- `timeout` (number, 선택): 이미지를 찾을 때까지 대기할 최대 시간 (초)
+  - 기본값: 없음 (시스템 기본값 사용)
+  - 최소값: 1
+  - 최대값: 300
+  - 0 이하의 값은 무시됩니다
 
 #### 출력 스키마
 
@@ -33,25 +37,40 @@
       {
         "image": "image1.png",
         "found": true,
-        "position": [100, 200],
+        "position": [100, 200],  # 튜플 (x, y) 또는 None
         "touched": true
       },
       {
         "image": "image2.png",
         "found": false,
-        "position": null,
-        "touched": false
+        "message": "화면에서 이미지를 찾을 수 없습니다."
       },
       {
         "image": "image3.png",
         "found": true,
-        "position": [300, 400],
+        "position": [300, 400],  # 튜플 (x, y) - 이미지 중심점 좌표
         "touched": true
+      },
+      {
+        "image": "image4.png",
+        "error": "이미지 처리 중 오류 발생"
       }
     ]
   }
 }
 ```
+
+**출력 필드 설명:**
+- `success`: 성공 여부 (boolean, 하나라도 이미지를 찾아서 터치했으면 `true`)
+- `folder_path`: 이미지 폴더 경로 (string)
+- `total_images`: 총 이미지 개수 (number)
+- `results`: 이미지 검색 결과 (array)
+  - `image`: 이미지 파일명 (string)
+  - `found`: 발견 여부 (boolean, 이미지를 찾았으면 `true`)
+  - `position`: 위치 튜플 [x, y] (array 또는 null, 이미지 중심점 좌표)
+  - `touched`: 터치 여부 (boolean, `found`가 `true`일 때만 존재)
+  - `message`: 에러 메시지 (string, 이미지를 찾지 못한 경우)
+  - `error`: 에러 메시지 (string, 이미지 처리 중 오류 발생 시)
 
 #### 동작 방식
 
@@ -61,15 +80,18 @@
    - 파일 이름 순서대로 정렬됩니다
 3. **화면 캡처**: 현재 화면을 캡처합니다 (`ScreenCapture`)
 4. **이미지 검색 및 터치**: 각 이미지 파일에 대해:
-   - 화면에서 이미지를 찾습니다 (`find_template` - OpenCV 템플릿 매칭)
-   - 이미지를 찾으면 해당 위치를 터치합니다 (`InputHandler.click`)
-   - 결과를 기록합니다
+   - 화면에서 이미지를 찾습니다 (`find_template` - OpenCV 템플릿 매칭, `threshold=0.7`)
+   - 이미지를 찾으면 위치 정보를 받습니다 (`location = (x, y, width, height)`)
+   - 이미지 중심점을 계산합니다 (`center_x = x + w // 2`, `center_y = y + h // 2`)
+   - 중심점 위치를 터치합니다 (`InputHandler.click(center_x, center_y)`)
+   - 결과를 기록합니다 (찾음/못 찾음, 위치, 터치 성공 여부)
+   - 예외 발생 시 에러 정보를 기록합니다
 5. **결과 반환**: 모든 이미지에 대한 검색 및 터치 결과를 반환합니다
 
 #### 의존성
 
-- **ScreenCapture**: 화면 캡처 및 이미지 찾기 (`automation_utils.screen_capture`)
-- **InputHandler**: 마우스 클릭 입력 (`automation_utils.input_handler`)
+- **ScreenCapture**: 화면 캡처 및 이미지 찾기 (`automation.screen_capture`)
+- **InputHandler**: 마우스 클릭 입력 (`automation.input_handler`)
 - **OpenCV (cv2)**: 이미지 템플릿 매칭
 
 #### 코드 예시
@@ -80,7 +102,15 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
     # 폴더 경로 추출
     folder_path = get_parameter(parameters, "folder_path", default="")
     
-    # 이미지 파일 수집
+    # timeout 파라미터 추출 및 검증
+    timeout_param = get_parameter(parameters, "timeout", default=None)
+    timeout = None
+    if timeout_param is not None:
+        timeout = float(timeout_param)
+        if timeout <= 0:
+            timeout = None
+    
+    # 이미지 파일 수집 (이름 순서대로 정렬)
     image_files = []
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
@@ -88,6 +118,7 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
             _, ext = os.path.splitext(filename.lower())
             if ext in image_extensions:
                 image_files.append(file_path)
+    image_files.sort()
     
     # 화면 캡처 및 입력 핸들러 초기화
     screen_capture = ScreenCapture()
@@ -96,31 +127,47 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
     # 각 이미지에 대해 검색 및 터치
     results = []
     for image_path in image_files:
-        # 화면에서 이미지 찾기
-        position = screen_capture.find_template(image_path, timeout=timeout)
-        
-        if position:
-            # 이미지를 찾으면 터치
-            input_handler.click(position[0], position[1])
+        try:
+            # 화면에서 이미지 찾기 (threshold=0.7)
+            location = screen_capture.find_template(image_path, threshold=0.7, timeout=timeout)
+            
+            if location:
+                # location에서 좌표와 크기 추출 (x, y, width, height)
+                x, y, w, h = location
+                # 이미지 중심점 계산
+                center_x = x + w // 2
+                center_y = y + h // 2
+                
+                # 중심점 위치를 터치
+                success = input_handler.click(center_x, center_y)
+                
+                results.append({
+                    "image": os.path.basename(image_path),
+                    "found": True,
+                    "position": (center_x, center_y),
+                    "touched": success
+                })
+            else:
+                results.append({
+                    "image": os.path.basename(image_path),
+                    "found": False,
+                    "message": "화면에서 이미지를 찾을 수 없습니다."
+                })
+        except Exception as e:
+            # 예외 발생 시 에러 정보 추가
             results.append({
                 "image": os.path.basename(image_path),
-                "found": True,
-                "position": position,
-                "touched": True
+                "error": str(e)
             })
-        else:
-            results.append({
-                "image": os.path.basename(image_path),
-                "found": False,
-                "position": None,
-                "touched": False
-            })
+    
+    # 성공 여부 판단: 하나라도 이미지를 찾아서 터치했으면 성공
+    success = any(r.get("found", False) and r.get("touched", False) for r in results)
     
     return {
         "action": "image-touch",
-        "status": "completed",
+        "status": "completed" if success else "failed",
         "output": {
-            "success": True,
+            "success": success,
             "folder_path": folder_path,
             "total_images": len(image_files),
             "results": results
@@ -162,20 +209,26 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 │  │     │ 4-1. 화면에서 이미지 찾기                │ │  │
 │  │     │     ScreenCapture.find_template()        │ │  │
 │  │     │     - OpenCV 템플릿 매칭 사용              │ │  │
+│  │     │     - threshold=0.7 설정                  │ │  │
 │  │     │     - 타임아웃 설정 가능                  │ │  │
+│  │     │     - location 반환: (x, y, w, h) 또는 None│ │  │
 │  │     └──────────────┬───────────────────────────┘ │  │
 │  │                    │                              │  │
 │  │                    ▼                              │  │
 │  │     ┌──────────────────────────────────────────┐ │  │
-│  │     │ 4-2. 이미지 찾기 성공 시 터치             │ │  │
-│  │     │     InputHandler.click(x, y)              │ │  │
-│  │     │     - 찾은 위치 좌표로 클릭                │ │  │
+│  │     │ 4-2. 이미지 찾기 성공 시 중심점 계산 및 터치│ │  │
+│  │     │     - location에서 (x, y, w, h) 추출      │ │  │
+│  │     │     - 중심점 계산: (x + w//2, y + h//2)   │ │  │
+│  │     │     - InputHandler.click(center_x, center_y)│ │  │
+│  │     │     - 클릭 성공 여부 반환                  │ │  │
 │  │     └──────────────┬───────────────────────────┘ │  │
 │  │                    │                              │  │
 │  │                    ▼                              │  │
 │  │     ┌──────────────────────────────────────────┐ │  │
 │  │     │ 4-3. 결과 기록                            │ │  │
-│  │     │     {image, found, position, touched}     │ │  │
+│  │     │     - 찾음: {image, found, position, touched}│ │  │
+│  │     │     - 못 찾음: {image, found, message}   │ │  │
+│  │     │     - 에러: {image, error}                │ │  │
 │  │     └──────────────────────────────────────────┘ │  │
 │  └──────────────────┬───────────────────────────────┘  │
 │                     │                                    │
@@ -188,7 +241,7 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 └──────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐
-│              외부 의존성 (automation_utils)              │
+│              외부 의존성 (automation)                    │
 │                                                          │
 │  ┌──────────────────┐  ┌──────────────────┐           │
 │  │ ScreenCapture    │  │ InputHandler     │           │
@@ -206,10 +259,12 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 ## 특징
 
 1. **순차 처리**: 이미지 파일들을 이름 순서대로 처리합니다
-2. **템플릿 매칭**: OpenCV의 템플릿 매칭 알고리즘을 사용하여 정확한 이미지 검색을 수행합니다
-3. **타임아웃 지원**: 각 이미지 검색에 타임아웃을 설정할 수 있습니다
-4. **상세한 결과**: 각 이미지에 대한 검색 및 터치 결과를 상세히 반환합니다
-5. **에러 처리**: 폴더가 없거나 이미지 파일이 없는 경우 적절한 에러 메시지를 반환합니다
+2. **템플릿 매칭**: OpenCV의 템플릿 매칭 알고리즘을 사용하여 정확한 이미지 검색을 수행합니다 (threshold=0.7)
+3. **중심점 계산**: 찾은 이미지의 중심점을 계산하여 정확한 위치를 터치합니다
+4. **타임아웃 지원**: 각 이미지 검색에 타임아웃을 설정할 수 있습니다 (선택 사항)
+5. **상세한 결과**: 각 이미지에 대한 검색 및 터치 결과를 상세히 반환합니다
+6. **에러 처리**: 폴더가 없거나 이미지 파일이 없는 경우, 또는 이미지 처리 중 오류 발생 시 적절한 에러 메시지를 반환합니다
+7. **성공 판단**: 하나라도 이미지를 찾아서 터치했으면 전체 작업이 성공으로 간주됩니다
 
 ## 사용 예시
 

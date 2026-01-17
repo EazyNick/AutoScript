@@ -68,12 +68,12 @@
 │  │  ┌────────────────────────────────────────────────────┐  │   │
 │  │  │  node_handlers: dict[str, Callable]                │  │   │
 │  │  │    "start" → StartNode.execute                     │  │   │
-│  │  │    "click" → ClickNode.execute                     │  │   │
 │  │  │    "wait" → WaitNode.execute                       │  │   │
 │  │  │    "condition" → ConditionNode.execute             │  │   │
 │  │  │    "repeat" → RepeatNode.execute                   │  │   │
 │  │  │    "image-touch" → ImageTouchNode.execute          │  │   │
 │  │  │    "excel-open" → ExcelOpenNode.execute            │  │   │
+│  │  │    "process-focus" → ProcessFocusNode.execute      │  │   │
 │  │  │    ...                                             │  │   │
 │  │  └────────────────────────────────────────────────────┘  │   │
 │  └───────────────────────┬──────────────────────────────────┘   │
@@ -97,10 +97,10 @@
 │  │              노드 구현 (BaseNode 상속)                    │   │
 │  │                                                          │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │   │
-│  │  │ StartNode    │  │ ClickNode    │  │ WaitNode     │ │   │
+│  │  │ StartNode    │  │ WaitNode     │  │ ConditionNode│ │   │
 │  │  │              │  │              │  │              │ │   │
 │  │  │ @NodeExecutor│  │ @NodeExecutor│  │ @NodeExecutor│ │   │
-│  │  │ ("start")    │  │ ("click")    │  │ ("wait")     │ │   │
+│  │  │ ("start")    │  │ ("wait")     │  │ ("condition")│ │   │
 │  │  │              │  │              │  │              │ │   │
 │  │  │ async def    │  │ async def    │  │ async def    │ │   │
 │  │  │ execute()    │  │ execute()    │  │ execute()    │ │   │
@@ -406,7 +406,6 @@ context.add_node_result(node_id, node_name, result)
 각 노드 타입에 대한 상세한 설명은 다음 문서를 참조하세요:
 
 - [경계 노드](./boundary-nodes.md)
-- [액션 노드](./action-nodes.md)
 - [이미지 노드](./image-nodes.md)
 - [엑셀 노드](./excel-nodes.md)
 - [조건 노드](./condition-nodes.md)

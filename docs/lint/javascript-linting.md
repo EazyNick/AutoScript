@@ -206,8 +206,15 @@ npm run lint && npm run format:check
 
 ## 자동 실행
 
-### 1. 수동 실행
+### 1. 수동 실행 (스크립트 사용)
 
+#### Python 스크립트 (모든 플랫폼)
+```bash
+# 프로젝트 루트에서 실행
+python scripts/linting/lint-js.py
+```
+
+#### npm 직접 실행
 ```bash
 # UI 디렉토리로 이동
 cd UI
@@ -219,7 +226,28 @@ npm run lint        # ESLint 검사
 npm run format:check # Prettier 포매팅 확인
 ```
 
-### 2. 자동 실행 (Git Pre-commit Hook)
+### 2. 통합 린팅 스크립트 (lint-all.bat)
+
+Windows에서 Python과 JavaScript 린팅을 한 번에 실행할 수 있는 배치 파일이 제공됩니다.
+
+#### 사용법
+```bash
+# 프로젝트 루트에서 실행
+scripts\lint-all.bat
+```
+
+#### 실행 순서
+스크립트는 다음 순서로 실행됩니다:
+
+1. **[1/5] Python linting check and auto-fix**: `ruff check --fix server/`
+2. **[2/5] Python formatting**: `ruff format server/`
+3. **[3/5] Mypy type checking**: `mypy server/` 또는 `python -m mypy server/` (mypy가 설치되어 있는 경우)
+4. **[4/5] JavaScript linting check and auto-fix**: `npm run lint:fix` (UI 폴더에서)
+5. **[5/5] JavaScript formatting**: `npm run format` (UI 폴더에서)
+
+> **참고**: `lint-all.bat`는 JavaScript 포매팅 확인(`format:check`)을 실행하지 않습니다. 수동으로 확인하려면 `cd UI && npm run format:check`를 실행하세요.
+
+### 3. 자동 실행 (Git Pre-commit Hook)
 
 커밋 전에 자동으로 JavaScript 린팅 검사를 실행합니다.
 
@@ -257,7 +285,7 @@ mv .git/hooks/pre-commit .git/hooks/pre-commit.disabled
 mv .git/hooks/pre-commit.disabled .git/hooks/pre-commit
 ```
 
-### 3. VS Code / Cursor 설정 (선택사항)
+### 4. VS Code / Cursor 설정 (선택사항)
 
 `.vscode/tasks.json` 파일을 생성하여 작업으로 등록할 수 있습니다:
 
@@ -342,7 +370,7 @@ Pre-commit hook은 다음 순서로 실행됩니다:
 
 #### 명령어를 찾을 수 없는 경우
 
-스크립트는 자동으로 `npm`을 찾습니다. 만약 찾지 못한다면:
+스크립트는 자동으로 `npm`을 찾습니다 (Windows에서는 `npm.cmd` 사용). 만약 찾지 못한다면:
 
 1. **npm 설치 확인**
    ```bash

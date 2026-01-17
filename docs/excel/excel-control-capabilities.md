@@ -370,6 +370,7 @@
 2. **기존 노드 예시**: 
    - `server/nodes/excelnodes/excel_open.py`
    - `server/nodes/excelnodes/excel_select_sheet.py`
+   - `server/nodes/excelnodes/excel_compare.py`
    - `server/nodes/excelnodes/excel_close.py`
 3. **ExcelManager 사용**: `server/nodes/excelnodes/excel_manager.py`의 함수들 사용
    - `get_excel_objects()`: 저장된 엑셀 객체 가져오기
