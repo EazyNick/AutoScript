@@ -12,13 +12,14 @@ Excel 파일을 열고 Excel 애플리케이션 인스턴스를 관리하는 노
 
 **노드 타입**: `excel-open`
 
-**설명**: Windows 환경에서 `win32com.client`를 사용하여 Excel 파일을 엽니다. 열린 Excel 인스턴스는 `ExcelManager`를 통해 관리되며, `execution_id`로 그룹화됩니다.
+**설명**: Windows 환경에서 `win32com.client`를 사용하여 Excel 파일을 엽니다. 열린 Excel 인스턴스는 `ExcelManager`를 통해 관리되며, 메타데이터의 `execution_id`로 저장됩니다.
 
 #### 파라미터
 
 - `file_path` (string, 필수): 열 Excel 파일 경로
 - `visible` (boolean, 기본값: true): Excel 창 표시 여부
-- `execution_id` (string, 선택): 실행 ID (같은 실행 ID의 Excel 인스턴스를 그룹화)
+
+> **참고**: `execution_id`는 파라미터가 아닙니다. 메타데이터(`_execution_id`)에서 자동으로 가져와서 사용됩니다.
 
 #### 출력 스키마
 
@@ -29,67 +30,70 @@ Excel 파일을 열고 Excel 애플리케이션 인스턴스를 관리하는 노
   "output": {
     "success": true,
     "file_path": "C:\\data\\example.xlsx",
-    "execution_id": "exec-123",
-    "workbook_count": 1
+    "visible": true,
+    "execution_id": "exec-123"
   }
 }
 ```
 
+**출력 필드 설명:**
+- `success`: 성공 여부 (boolean)
+- `file_path`: 열린 엑셀 파일 경로 (string)
+- `visible`: 엑셀 창 표시 여부 (boolean)
+- `execution_id`: 엑셀 실행 ID (string, 다음 노드에서 사용)
+
 #### 동작 방식
 
-1. **환경 확인**: `win32com.client`가 사용 가능한지 확인합니다 (Windows 환경)
+1. **execution_id 확인**: 메타데이터에서 `_execution_id`를 가져옵니다 (필수)
 2. **파일 경로 검증**: 파일 경로가 제공되었는지 확인하고, 파일이 존재하는지 확인합니다
-3. **Excel 애플리케이션 열기**: `win32com.client.Dispatch("Excel.Application")`를 사용하여 Excel 애플리케이션을 엽니다
-4. **Excel 창 표시 설정**: `visible` 파라미터에 따라 Excel 창을 표시하거나 숨깁니다
-5. **워크북 열기**: `Workbooks.Open()`을 사용하여 지정된 파일을 엽니다
-6. **인스턴스 저장**: `ExcelManager.store_excel_objects()`를 사용하여 Excel 인스턴스를 저장합니다
-   - `execution_id`로 그룹화되어 저장됩니다
-   - 같은 `execution_id`의 Excel 인스턴스들은 함께 관리됩니다
-7. **결과 반환**: 성공 여부와 파일 정보를 반환합니다
+3. **엑셀 파일 열기**: `excel_manager.open_excel_file()` 공통 함수를 사용하여 엑셀 파일을 엽니다
+   - `win32com.client`를 사용하여 Excel 애플리케이션을 엽니다
+   - `visible` 파라미터에 따라 Excel 창을 표시하거나 숨깁니다
+4. **인스턴스 저장**: `ExcelManager.store_excel_objects()`를 사용하여 Excel 인스턴스를 저장합니다
+   - `execution_id`로 저장됩니다
+   - 다음 노드에서 이 `execution_id`를 사용하여 엑셀 객체를 찾을 수 있습니다
+5. **결과 반환**: 성공 여부, 파일 경로, visible, execution_id를 반환합니다
 
 #### Excel 인스턴스 관리
 
-`ExcelManager`는 열린 Excel 인스턴스들을 `execution_id`로 그룹화하여 관리합니다:
+`ExcelManager`는 열린 Excel 인스턴스들을 `execution_id`로 저장합니다:
 
 ```python
 # ExcelManager 내부 구조 (개념적)
-excel_instances = {
-    "exec-123": [
-        {"app": excel_app, "workbook": workbook, "file_path": "..."},
-        ...
-    ],
-    "exec-456": [...]
+_excel_objects = {
+    "exec-123": {
+        "excel_app": excel_app,
+        "workbook": workbook,
+        "file_path": "..."
+    },
+    "exec-456": {...}
 }
 ```
 
-이렇게 하면 같은 워크플로우 실행에서 열린 여러 Excel 파일들을 함께 관리할 수 있습니다.
+각 `execution_id`는 하나의 Excel 인스턴스(애플리케이션 + 워크북)를 저장합니다.
 
 #### 코드 예시
 
 ```python
 @NodeExecutor("excel-open")
 async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
-    # win32com 확인
-    if win32com is None:
-        return create_failed_result(
-            action="excel-open",
-            reason="win32com_not_available",
-            message="Windows 환경에서만 사용 가능합니다."
-        )
-    
     # 파일 경로 추출
     file_path = get_parameter(parameters, "file_path", default="")
     visible = get_parameter(parameters, "visible", default=True)
-    execution_id = get_parameter(parameters, "execution_id")
     
-    # Excel 애플리케이션 열기
-    excel_app = win32com.client.Dispatch("Excel.Application")
-    excel_app.Visible = visible
+    # execution_id 가져오기 (메타데이터에서)
+    execution_id = parameters.get("_execution_id")
+    if not execution_id:
+        return create_failed_result(
+            action="excel-open",
+            reason="execution_id_required",
+            message="execution_id가 필요합니다."
+        )
     
-    # 워크북 열기
-    workbook = excel_app.Workbooks.Open(file_path)
+    # 공통 함수를 사용하여 엑셀 파일 열기
+    excel_app, workbook = await open_excel_file(file_path, visible=bool(visible))
     
-    # 인스턴스 저장
+    # 엑셀 객체 저장
     store_excel_objects(execution_id, excel_app, workbook, file_path)
     
     return {
@@ -98,8 +102,8 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
         "output": {
             "success": True,
             "file_path": file_path,
-            "execution_id": execution_id,
-            "workbook_count": 1
+            "visible": bool(visible),
+            "execution_id": execution_id
         }
     }
 ```
@@ -114,12 +118,18 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 
 **노드 타입**: `excel-close`
 
-**설명**: 지정된 `execution_id`에 해당하는 모든 Excel 인스턴스를 닫고 종료합니다. 저장 여부를 선택할 수 있습니다.
+**설명**: 지정된 `execution_id`에 해당하는 Excel 인스턴스를 닫고 종료합니다. 저장 여부를 선택할 수 있습니다.
 
 #### 파라미터
 
-- `execution_id` (string, 필수): 닫을 Excel 인스턴스들의 실행 ID
+- `execution_id` (string, 선택): 닫을 Excel 인스턴스들의 실행 ID
+  - 이전 노드 출력에서 선택 가능 (기본값: `outdata.output.execution_id`)
+  - 직접 입력하거나 이전 노드 출력에서 선택
 - `save_changes` (boolean, 기본값: true): 변경사항 저장 여부
+  - `true`: 변경사항을 저장하고 닫습니다
+  - `false`: 변경사항을 저장하지 않고 닫습니다
+
+> **참고**: `execution_id`가 제공되지 않으면 이전 노드 출력 또는 메타데이터에서 자동으로 가져옵니다.
 
 #### 출력 스키마
 
@@ -129,58 +139,54 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
   "status": "completed",
   "output": {
     "success": true,
-    "execution_id": "exec-123",
-    "closed_count": 2
+    "save_changes": true
   }
 }
 ```
 
+**출력 필드 설명:**
+- `success`: 성공 여부 (boolean)
+- `save_changes`: 변경사항 저장 여부 (boolean)
+
 #### 동작 방식
 
-1. **execution_id 확인**: `execution_id`가 제공되었는지 확인합니다
-2. **Excel 인스턴스 찾기**: `ExcelManager`에서 해당 `execution_id`의 모든 Excel 인스턴스를 가져옵니다
-3. **워크북 닫기**: 각 워크북을 닫습니다
+1. **execution_id 확인**: `execution_id`를 가져옵니다 (우선순위: 사용자 입력 > 이전 노드 출력 > 메타데이터)
+2. **Excel 인스턴스 찾기**: `ExcelManager`에서 해당 `execution_id`의 Excel 인스턴스를 가져옵니다
+3. **워크북 닫기**: 워크북을 닫습니다
    - `save_changes`가 `true`이면 변경사항을 저장하고 닫습니다
    - `save_changes`가 `false`이면 변경사항을 저장하지 않고 닫습니다
-4. **Excel 애플리케이션 종료**: 모든 워크북을 닫은 후 Excel 애플리케이션을 종료합니다
-5. **인스턴스 제거**: `ExcelManager`에서 해당 인스턴스들을 제거합니다
-6. **결과 반환**: 닫은 인스턴스 개수를 반환합니다
+4. **Excel 애플리케이션 종료**: 워크북을 닫은 후 Excel 애플리케이션을 종료합니다
+5. **인스턴스 제거**: `ExcelManager`에서 해당 인스턴스를 제거합니다
+6. **결과 반환**: 성공 여부와 저장 여부를 반환합니다
 
 #### 코드 예시
 
 ```python
 @NodeExecutor("excel-close")
 async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
-    execution_id = get_parameter(parameters, "execution_id", default="")
-    save_changes = get_parameter(parameters, "save_changes", default=True)
+    save_changes = get_parameter(parameters, "save_changes", default=False)
+    
+    # execution_id 가져오기 (우선순위: 사용자 입력 > 이전 노드 출력 > 메타데이터)
+    execution_id = (
+        get_parameter(parameters, "execution_id", default="")
+        or parameters.get("_execution_id_from_prev")
+        or parameters.get("_execution_id")
+    )
     
     # Excel 인스턴스 가져오기
-    excel_instances = get_excel_objects(execution_id)
+    excel_data = get_excel_objects(execution_id)
+    if not excel_data:
+        return create_failed_result(...)
     
-    closed_count = 0
-    for instance in excel_instances:
-        workbook = instance["workbook"]
-        excel_app = instance["app"]
-        
-        # 워크북 닫기
-        workbook.Close(SaveChanges=save_changes)
-        closed_count += 1
-    
-    # Excel 애플리케이션 종료
-    if excel_instances:
-        excel_app = excel_instances[0]["app"]
-        excel_app.Quit()
-    
-    # 인스턴스 제거
-    remove_excel_objects(execution_id)
+    # 워크북 닫기
+    success = close_excel_objects(execution_id, save_changes=bool(save_changes))
     
     return {
         "action": "excel-close",
         "status": "completed",
         "output": {
             "success": True,
-            "execution_id": execution_id,
-            "closed_count": closed_count
+            "save_changes": bool(save_changes)
         }
     }
 ```
@@ -241,6 +247,11 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
     sheet_name = get_parameter(parameters, "sheet_name", default="")
     sheet_index = get_parameter(parameters, "sheet_index")
     
+    # execution_id 검증
+    if not execution_id:
+        # 메타데이터에서도 시도
+        execution_id = parameters.get("_execution_id")
+    
     # 엑셀 객체 가져오기
     excel_data = get_excel_objects(execution_id)
     if not excel_data:
@@ -255,8 +266,17 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
     # 시트 선택
     if sheet_name:
         selected_sheet = workbook.Worksheets(sheet_name)
+        actual_sheet_name = selected_sheet.Name
     elif sheet_index is not None:
-        selected_sheet = workbook.Worksheets(sheet_index)
+        sheet_index_int = int(sheet_index)
+        selected_sheet = workbook.Worksheets(sheet_index_int)
+        actual_sheet_name = selected_sheet.Name
+    else:
+        return create_failed_result(
+            action="excel-select-sheet",
+            reason="sheet_identifier_required",
+            message="시트 이름 또는 시트 인덱스 중 하나는 필수입니다."
+        )
     
     # 시트 활성화
     selected_sheet.Activate()
@@ -267,8 +287,8 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
         "output": {
             "success": True,
             "execution_id": execution_id,
-            "sheet_name": selected_sheet.Name,
-            "sheet_index": sheet_index,
+            "sheet_name": actual_sheet_name,
+            "sheet_index": sheet_index if sheet_index is not None else None,
             "selected_by": "name" if sheet_name else "index"
         }
     }
@@ -283,14 +303,13 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 │  ┌──────────────────────────────────────────────────┐  │
 │  │          엑셀 열기 노드 (excel-open)              │  │
 │  │  ┌────────────────────────────────────────────┐  │  │
-│  │  │  입력: {file_path, visible, execution_id} │  │  │
+│  │  │  입력: {file_path, visible}                │  │  │
 │  │  │  처리:                                      │  │  │
-│  │  │    1. win32com 확인                        │  │  │
+│  │  │    1. execution_id 확인 (메타데이터)        │  │  │
 │  │  │    2. 파일 경로 검증                        │  │  │
-│  │  │    3. Excel 애플리케이션 열기               │  │  │
-│  │  │    4. 워크북 열기                          │  │  │
-│  │  │    5. ExcelManager에 저장                  │  │  │
-│  │  │  출력: {success, file_path, execution_id}  │  │  │
+│  │  │    3. open_excel_file() 공통 함수 사용     │  │  │
+│  │  │    4. ExcelManager에 저장                  │  │  │
+│  │  │  출력: {success, file_path, visible, execution_id}│  │  │
 │  │  └────────────────────────────────────────────┘  │  │
 │  └──────────────────┬───────────────────────────────┘  │
 │                     │                                    │
@@ -298,13 +317,11 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 │  ┌──────────────────────────────────────────────────┐  │
 │  │              ExcelManager                         │  │
 │  │  ┌────────────────────────────────────────────┐  │  │
-│  │  │  excel_instances: dict[str, list]          │  │  │
-│  │  │    "exec-123": [                           │  │  │
-│  │  │      {app, workbook, file_path},           │  │  │
-│  │  │      {app, workbook, file_path},           │  │  │
-│  │  │      ...                                   │  │  │
-│  │  │    ]                                        │  │  │
-│  │  │    "exec-456": [...]                       │  │  │
+│  │  │  _excel_objects: dict[str, dict]          │  │  │
+│  │  │    "exec-123": {                           │  │  │
+│  │  │      excel_app, workbook, file_path        │  │  │
+│  │  │    }                                        │  │  │
+│  │  │    "exec-456": {...}                       │  │  │
 │  │  └────────────────────────────────────────────┘  │  │
 │  └──────────────────┬───────────────────────────────┘  │
 │                     │                                    │
@@ -317,7 +334,7 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 │  │  │    1. ExcelManager에서 엑셀 객체 가져오기  │  │  │
 │  │  │    2. 시트 이름 또는 인덱스로 시트 찾기    │  │  │
 │  │  │    3. 시트 활성화                          │  │  │
-│  │  │  출력: {success, sheet_name, sheet_index}  │  │  │
+│  │  │  출력: {success, execution_id, sheet_name, sheet_index, selected_by}│  │  │
 │  │  └────────────────────────────────────────────┘  │  │
 │  └──────────────────┬───────────────────────────────┘  │
 │                     │                                    │
@@ -325,13 +342,14 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 │  ┌──────────────────────────────────────────────────┐  │
 │  │          엑셀 닫기 노드 (excel-close)              │  │
 │  │  ┌────────────────────────────────────────────┐  │  │
-│  │  │  입력: {execution_id, save_changes}        │  │  │
+│  │  │  입력: {execution_id(선택), save_changes}  │  │  │
 │  │  │  처리:                                      │  │  │
-│  │  │    1. ExcelManager에서 인스턴스 가져오기    │  │  │
-│  │  │    2. 각 워크북 닫기 (저장 여부 선택)        │  │  │
-│  │  │    3. Excel 애플리케이션 종료               │  │  │
-│  │  │    4. ExcelManager에서 제거                 │  │  │
-│  │  │  출력: {success, execution_id, closed_count}│  │  │
+│  │  │    1. execution_id 확인 (우선순위: 사용자 입력 > 이전 노드 출력 > 메타데이터)│  │  │
+│  │  │    2. ExcelManager에서 인스턴스 가져오기    │  │  │
+│  │  │    3. 워크북 닫기 (저장 여부 선택)          │  │  │
+│  │  │    4. Excel 애플리케이션 종료               │  │  │
+│  │  │    5. ExcelManager에서 제거                 │  │  │
+│  │  │  출력: {success, save_changes}             │  │  │
 │  │  └────────────────────────────────────────────┘  │  │
 │  └──────────────────────────────────────────────────┘  │
 │                                                          │
@@ -361,8 +379,7 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 ## 특징
 
 1. **Windows 전용**: `win32com.client`를 사용하므로 Windows 환경에서만 동작합니다
-2. **인스턴스 관리**: `execution_id`로 Excel 인스턴스들을 그룹화하여 관리합니다
-3. **여러 파일 지원**: 같은 `execution_id`로 여러 Excel 파일을 열 수 있습니다
+2. **인스턴스 관리**: `execution_id`로 Excel 인스턴스를 저장하고 관리합니다
 4. **시트 선택 지원**: 시트 이름 또는 인덱스로 특정 시트를 선택할 수 있습니다
 5. **자동 정리**: `excel-close` 노드로 모든 인스턴스를 한 번에 닫을 수 있습니다
 6. **저장 제어**: 닫을 때 변경사항 저장 여부를 선택할 수 있습니다
@@ -376,48 +393,47 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 ```
 [시작] → [엑셀 열기] → [대기] → [엑셀 닫기]
          (file_path: C:\data\file1.xlsx)
-                              (execution_id: exec-123)
+                              (execution_id: 이전 노드 출력에서 선택)
 ```
 
 이 워크플로우는:
 1. 시작 노드로 워크플로우를 시작합니다
-2. 엑셀 열기 노드가 `C:\data\file1.xlsx` 파일을 엽니다 (`execution_id: exec-123`)
+2. 엑셀 열기 노드가 `C:\data\file1.xlsx` 파일을 엽니다 (메타데이터의 `execution_id` 사용)
 3. 대기 노드로 잠시 대기합니다
-4. 엑셀 닫기 노드가 `exec-123`에 해당하는 모든 Excel 인스턴스를 닫습니다
+4. 엑셀 닫기 노드가 이전 노드 출력에서 `execution_id`를 가져와서 Excel 인스턴스를 닫습니다
 
 #### 시트 선택 워크플로우
 
 ```
 [시작] → [엑셀 열기] → [엑셀 시트 선택] → [엑셀 닫기]
          (file_path: C:\data\file1.xlsx)  (sheet_name: Sheet1)
-         (execution_id: exec-123)         (execution_id: exec-123)
-                                          (execution_id: exec-123)
+                                           (execution_id: 이전 노드 출력에서 선택)
 ```
 
 이 워크플로우는:
 1. 시작 노드로 워크플로우를 시작합니다
-2. 엑셀 열기 노드가 `C:\data\file1.xlsx` 파일을 엽니다 (`execution_id: exec-123`)
-3. 엑셀 시트 선택 노드가 `Sheet1` 시트를 선택합니다 (`execution_id: exec-123`)
-4. 엑셀 닫기 노드가 `exec-123`에 해당하는 모든 Excel 인스턴스를 닫습니다
+2. 엑셀 열기 노드가 `C:\data\file1.xlsx` 파일을 엽니다 (메타데이터의 `execution_id` 사용)
+3. 엑셀 시트 선택 노드가 `Sheet1` 시트를 선택합니다 (이전 노드 출력에서 `execution_id` 선택)
+4. 엑셀 닫기 노드가 이전 노드 출력에서 `execution_id`를 가져와서 Excel 인스턴스를 닫습니다
 
 ### 여러 파일 열기 예시
 
 ```
-[시작] → [엑셀 열기] → [엑셀 열기] → [엑셀 닫기]
-         (file1.xlsx)   (file2.xlsx)   (모두 닫기)
-         (exec-123)     (exec-123)     (exec-123)
+[시작] → [엑셀 열기] → [엑셀 열기] → [엑셀 닫기] → [엑셀 닫기]
+         (file1.xlsx)   (file2.xlsx)   (execution_id: 이전 노드 출력)
+         (exec-123)     (exec-456)     (execution_id: 이전 노드 출력)
 ```
 
-같은 `execution_id`를 사용하면 여러 파일을 열고, `excel-close` 노드 하나로 모두 닫을 수 있습니다.
+> **참고**: 현재 구현에서는 각 `execution_id`당 하나의 Excel 인스턴스만 저장됩니다. 여러 파일을 열려면 서로 다른 `execution_id`를 사용해야 하며, 각각 별도로 닫아야 합니다.
 
 ## 주의사항
 
 1. **Windows 환경 필수**: Windows 환경에서만 동작합니다
 2. **Excel 설치 필요**: Microsoft Excel이 설치되어 있어야 합니다
-3. **인스턴스 관리**: `execution_id`를 올바르게 설정하지 않으면 Excel 인스턴스가 정리되지 않을 수 있습니다
+3. **인스턴스 관리**: `execution_id`는 메타데이터에서 자동으로 가져오거나 이전 노드 출력에서 선택할 수 있습니다
 4. **파일 경로**: 파일 경로는 절대 경로를 사용하는 것이 안전합니다
-5. **동시 실행**: 같은 `execution_id`로 여러 Excel 파일을 열 수 있지만, 같은 파일을 중복으로 열면 에러가 발생할 수 있습니다
-6. **엑셀 객체 생명주기**: 엑셀 열기 노드 실행 후 엑셀 객체는 엑셀 닫기 노드가 실행될 때까지 유지됩니다. 각 노드가 별도의 API 호출로 실행되므로, 엑셀 객체는 즉시 정리되지 않습니다.
+5. **엑셀 객체 생명주기**: 엑셀 열기 노드 실행 후 엑셀 객체는 엑셀 닫기 노드가 실행될 때까지 유지됩니다. 각 노드가 별도의 API 호출로 실행되므로, 엑셀 객체는 즉시 정리되지 않습니다
+6. **execution_id 전달**: 엑셀 열기 노드의 출력에서 `execution_id`를 가져와서 다음 노드(엑셀 시트 선택, 엑셀 닫기)에서 사용해야 합니다
 
 ### excel-compare (엑셀 비교 노드)
 
@@ -456,13 +472,24 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 }
 ```
 
+**출력 필드 설명:**
+- `success`: 성공 여부 (boolean)
+- `matched_count`: 매칭된 행 개수 (number)
+- `updated_count`: 업데이트된 행 개수 (number)
+- `source_file_path`: 원본 엑셀 파일 경로 (string)
+- `target_file_path`: 대상 엑셀 파일 경로 (string)
+
 #### 동작 방식
 
-1. **원본 엑셀 열기**: `source_file_path`로 원본 엑셀 파일을 엽니다
+1. **원본 엑셀 열기**: `source_file_path`로 원본 엑셀 파일을 엽니다 (`open_excel_file()` 공통 함수 사용)
 2. **원본 시트 선택**: `source_sheet_name`으로 원본 시트를 선택합니다
-3. **대상 엑셀 열기**: `target_file_path`로 대상 엑셀 파일을 엽니다
+3. **대상 엑셀 열기**: `target_file_path`로 대상 엑셀 파일을 엽니다 (`open_excel_file()` 공통 함수 사용)
 4. **대상 시트 선택**: `target_sheet_name`으로 대상 시트를 선택합니다
-5. **데이터 비교 및 복사**: `match_columns`로 행을 매칭하여 `automation_column` 값을 복사합니다
+5. **데이터 비교 및 복사**: 
+   - 2행이 헤더, 3행부터 데이터입니다
+   - `match_columns` 배열의 각 열 값을 합쳐서 키를 생성합니다 (예: "level1|level2|level3")
+   - 원본 엑셀을 해시맵으로 인덱싱합니다
+   - 대상 엑셀에서 매칭되는 행을 찾아 `automation_column` 값을 복사합니다
 6. **엑셀 닫기**: 원본 엑셀은 저장하지 않고 닫고, 대상 엑셀은 `save_changes` 옵션에 따라 저장 후 닫습니다
 
 #### 특징

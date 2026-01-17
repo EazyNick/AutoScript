@@ -492,10 +492,12 @@ export class WorkflowPage {
 
     /**
      * 스크립트 데이터 로드
+     * @param {Object} script - 스크립트 정보
+     * @param {boolean} forceReload - 강제 재로드 여부
      */
-    async loadScriptData(script) {
+    async loadScriptData(script, forceReload = false) {
         if (this.loadService) {
-            return this.loadService.load(script);
+            return this.loadService.load(script, forceReload);
         }
     }
 
@@ -588,7 +590,7 @@ export class WorkflowPage {
      * 사이드바에서 스크립트 선택 시 호출됩니다.
      * @param {Event} event - scriptChanged 이벤트 객체
      */
-    onScriptChanged(event) {
+    async onScriptChanged(event) {
         const logger = this.getLogger();
         const log = logger.log;
 
@@ -605,13 +607,19 @@ export class WorkflowPage {
             return;
         }
 
+        // 노드 레지스트리 로딩 완료 대기 (팔레트에 노드가 표시되도록)
+        const registry = getNodeRegistry();
+        try {
+            log('[WorkflowPage] 노드 레지스트리 로딩 완료 대기...');
+            await registry.getNodeConfigs();
+            log('[WorkflowPage] 노드 레지스트리 로딩 완료');
+        } catch (error) {
+            logger.warn('[WorkflowPage] 노드 레지스트리 로딩 실패:', error);
+            // 계속 진행 (폴백 설정 사용)
+        }
+
         // 중복 로드 방지 (강제 재로드가 아닌 경우에만)
         if (this.loadService && !forceReload) {
-            if (this.loadService.isLoading) {
-                log('[WorkflowPage] ⚠️ 이미 로딩 중입니다. 중복 로드 방지');
-                return;
-            }
-
             // 이미 같은 스크립트가 로드되었으면 건너뛰기
             if (this.loadService.isScriptLoaded(script.id)) {
                 log('[WorkflowPage] 같은 스크립트가 이미 로드되었습니다. 중복 로드 방지:', script.id);
@@ -619,22 +627,15 @@ export class WorkflowPage {
             }
         }
 
-        // 강제 재로드인 경우 로드된 스크립트 ID 초기화
-        if (forceReload && this.loadService) {
-            this.loadService._lastLoadedScriptId = null;
-            log('[WorkflowPage] 강제 재로드를 위해 로드된 스크립트 ID 초기화');
-        }
-
         // 이전 스크립트가 있으면 저장 후 새 스크립트 로드
         if (previousScript) {
             this.saveWorkflowForScript(previousScript);
-            setTimeout(() => {
-                this.loadScriptData(script);
-            }, 100);
-        } else {
-            // 첫 로드인 경우 바로 로드
-            this.loadScriptData(script);
+            // 짧은 딜레이 후 로드 (저장 완료 대기)
+            await new Promise((resolve) => setTimeout(resolve, 50));
         }
+
+        // 스크립트 로드 (강제 재로드 플래그 전달)
+        await this.loadScriptData(script, forceReload);
     }
 
     /**

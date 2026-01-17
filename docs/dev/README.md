@@ -40,6 +40,7 @@
 ## 시스템 이해
 
 - **[워크플로우 구조](workflow-structure.md)** - 워크플로우 데이터 구조 및 저장 형식
+- **[스크립트 로드 워크플로우](scripts/script-loading-workflow.md)** - 스크립트 로드 프로세스 및 Race Condition 해결
 - **[노드 실행 흐름](node-execution-flow.md)** - 노드 실행 프로세스 및 실행 순서
 - **[실행 로그 흐름](execution-log-flow.md)** - 실행 로그 생성 및 저장 프로세스
 - **[노드 출력 표준](node-output-standard.md)** - 노드 출력 데이터 형식 및 표준

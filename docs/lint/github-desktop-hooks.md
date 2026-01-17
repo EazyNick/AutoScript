@@ -167,7 +167,7 @@ git commit --no-verify -m "your message"
    - 에러 메시지에 따라 코드 수정
    - 자동 수정이 안 되는 경우 수동으로 수정
    - Python: `ruff check --fix server/` 및 `ruff format server/`
-   - JavaScript: `cd UI && npm run lint:fix && npm run format`
+   - JavaScript: `cd UI && npm run lint:fix && npm run format && npm run lint && npm run format:check`
 
 3. **다시 커밋**
    - 문제를 수정한 후 다시 커밋 시도

@@ -76,6 +76,15 @@ export class AddNodeModal {
      */
     async generateModalContent() {
         const registry = getNodeRegistry();
+
+        // 노드 레지스트리 로딩 완료 대기 (팔레트에 노드가 표시되도록)
+        try {
+            await registry.getNodeConfigs();
+        } catch (error) {
+            console.warn('[AddNodeModal] 노드 레지스트리 로딩 실패:', error);
+            // 계속 진행 (폴백 설정 사용)
+        }
+
         const nodeTypeOptionsPromises = Object.entries(NODE_TYPE_LABELS).map(async ([value, label]) => {
             const config = await registry.getConfig(value);
             // 경계 노드는 선택 목록에서 제외 (자동 생성되므로)

@@ -56,8 +56,8 @@ class ExcelCloseNode(BaseNode):
             )
 
         # 파라미터 추출
-        # save_changes: 변경사항 저장 여부 (기본값: False)
-        save_changes = get_parameter(parameters, "save_changes", default=False)
+        # save_changes: 변경사항 저장 여부 (기본값: True, nodes_config.py와 일치)
+        save_changes = get_parameter(parameters, "save_changes", default=True)
 
         # execution_id 가져오기 (우선순위: 사용자 입력 > 이전 노드 출력 > 메타데이터)
         # execution_id: 워크플로우 실행 ID (열려있는 엑셀 객체를 찾기 위해 필요)

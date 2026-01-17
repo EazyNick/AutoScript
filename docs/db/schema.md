@@ -312,7 +312,8 @@ CREATE TABLE script_tags (
 CREATE TABLE dashboard_stats (
     stat_key TEXT PRIMARY KEY,
     stat_value INTEGER NOT NULL DEFAULT 0,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
 
@@ -320,6 +321,7 @@ CREATE TABLE dashboard_stats (
 - `stat_key`: 통계 키 (PRIMARY KEY)
 - `stat_value`: 통계 값
 - `updated_at`: 수정 시간
+- `created_at`: 생성 시간
 
 **인덱스:**
 - PRIMARY KEY: `stat_key`
@@ -327,9 +329,38 @@ CREATE TABLE dashboard_stats (
 
 **주요 통계 키:**
 - `total_scripts`: 전체 스크립트 개수
-- `today_executions`: 오늘 실행 횟수
-- `today_failed`: 오늘 실패 횟수
+- `all_executions`: 전체 실행 시 실행된 스크립트 개수
+- `all_failed_scripts`: 전체 실행 시 실패한 스크립트 개수
 - `inactive_scripts`: 비활성 스크립트 개수
+
+### 9. `log_stats` 테이블
+
+로그 통계 데이터를 저장합니다. 실행 기록 페이지 통계 계산에 사용됩니다.
+
+```sql
+CREATE TABLE log_stats (
+    stat_key TEXT PRIMARY KEY,
+    stat_value INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+**컬럼 설명:**
+- `stat_key`: 통계 키 (PRIMARY KEY)
+- `stat_value`: 통계 값
+- `updated_at`: 수정 시간
+- `created_at`: 생성 시간
+
+**인덱스:**
+- PRIMARY KEY: `stat_key`
+- `idx_log_stats_key`: 키 기반 조회 최적화
+
+**주요 통계 키:**
+- `total`: 전체 실행 개수 (execution_id 기준 고유 개수)
+- `completed`: 완료된 로그 개수 (노드 단위)
+- `failed`: 실패한 로그 개수 (노드 단위)
+- `average_execution_time`: 평균 실행 시간 (밀리초)
 
 ## 뷰(View)
 
@@ -380,6 +411,7 @@ scripts (부모)
 
 - `user_settings`: 사용자 설정 (외래키 없음)
 - `dashboard_stats`: 대시보드 통계 (외래키 없음)
+- `log_stats`: 로그 통계 (외래키 없음)
 - `tags`: 태그 정보 (외래키 없음, `script_tags`를 통해 연결)
 
 ## 데이터 무결성
@@ -425,17 +457,21 @@ conn.execute("PRAGMA foreign_keys = ON")
 기존 테이블에 컬럼을 추가하는 마이그레이션이 자동으로 실행됩니다.
 
 **마이그레이션 대상:**
-- `nodes`: `connected_to`, `connected_from`, `parameters`, `description`, `updated_at`
+- `nodes`: `connected_to`, `connected_from`, `parameters`, `description`, `updated_at`, `is_connected`, `connection_sequence`, `node_identifier`
 - `scripts`: `active`, `last_executed_at`, `execution_order`
 - `user_settings`: `user_id`
-- `node_execution_logs`: 새 테이블 (자동 생성)
+- `node_execution_logs`: 새 테이블 (자동 생성) 및 `is_connected`, `connection_sequence`, `node_identifier` 컬럼 추가
+- `log_stats`: 새 테이블 (자동 생성)
 
 **마이그레이션 실행:**
 ```python
 from server.db.database import DatabaseManager
 
-db = DatabaseManager()  # 자동으로 마이그레이션 실행
+db = DatabaseManager()
+db.init_database()  # 테이블 생성 및 마이그레이션 실행
 ```
+
+> **참고**: `init_database()` 메서드는 `create_tables()`와 `migrate_tables()`를 모두 실행합니다. 실제 서버 실행 시에는 `main.py`의 `startup_event`에서 자동으로 호출됩니다.
 
 ## 사용 예시
 

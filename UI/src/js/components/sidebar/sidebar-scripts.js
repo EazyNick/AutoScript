@@ -18,6 +18,7 @@ import { getDashboardManagerInstance } from '../../../pages/workflow/dashboard.j
 import { LogAPI } from '../../api/logapi.js';
 import { t } from '../../utils/i18n.js';
 import { getPageRouterInstance } from '../../../pages/workflow/page-router.js';
+import { getToastManagerInstance } from '../../utils/toast.js';
 
 /**
  * 스크립트 관리 클래스
@@ -543,12 +544,22 @@ export class SidebarScriptManager {
         log('[Scripts] deleteScript() 호출됨');
         log('[Scripts] 삭제 대상 스크립트:', { id: script.id, name: script.name, index: index });
 
-        // 사용자 확인 모달 표시 (사용자 경험 향상)
-        modalManager.showConfirm(
+        // 사용자 확인 모달 표시 (가운데 모달)
+        // HTML 이스케이프를 위해 스크립트 이름만 이스케이프 처리
+        const escapeHtml = (text) => {
+            if (text === null || text === undefined) {
+                return '';
+            }
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        };
+        const escapedScriptName = escapeHtml(script.name);
+        modalManager.showCenterConfirm(
             '스크립트 삭제',
             `<div style="text-align: center; padding: 10px 0;">
                 <p style="font-size: 16px; margin-bottom: 10px; color: #e2e8f0;">
-                    <strong>"${script.name}"</strong> 스크립트를 삭제하시겠습니까?
+                    <strong>"${escapedScriptName}"</strong> 스크립트를 삭제하시겠습니까?
                 </p>
                 <p style="font-size: 14px; color: #a0aec0; margin-top: 10px;">
                     이 작업은 되돌릴 수 없습니다.
@@ -612,8 +623,11 @@ export class SidebarScriptManager {
                         log('[Scripts] ✅ 스크립트 삭제 완료:', script.name);
                         log('[Scripts] 남은 스크립트 개수:', this.sidebarManager.scripts.length);
 
-                        // 성공 메시지 표시
-                        modalManager.showAlert('삭제 완료', `"${script.name}" 스크립트가 삭제되었습니다.`);
+                        // 성공 메시지 표시 (토스트)
+                        const toastManager = getToastManagerInstance();
+                        if (toastManager) {
+                            toastManager.success(`"${script.name}" 스크립트가 삭제되었습니다.`, 3000);
+                        }
                     } else {
                         log('[Scripts] ⚠️ ScriptAPI를 사용할 수 없음. 로컬 폴백 사용');
                         // API가 없을 때의 폴백
@@ -640,7 +654,7 @@ export class SidebarScriptManager {
                         message: error.message,
                         stack: error.stack
                     });
-                    modalManager.showAlert('삭제 실패', `스크립트 삭제 중 오류가 발생했습니다: ${error.message}`);
+                    modalManager.showCenterAlert('삭제 실패', `스크립트 삭제 중 오류가 발생했습니다: ${error.message}`);
                 }
             },
             () => {

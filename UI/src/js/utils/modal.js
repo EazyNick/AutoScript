@@ -357,7 +357,7 @@ export class ModalManager {
                 <span class="result-modal-close">&times;</span>
             </div>
             <div class="result-modal-body">
-                <p>${escapeHtml(message)}</p>
+                ${message}
             </div>
             <div class="result-modal-footer">
                 <button id="center-confirm-btn" class="btn btn-primary">확인</button>
@@ -461,7 +461,7 @@ export class ModalManager {
                 <span class="result-modal-close">&times;</span>
             </div>
             <div class="result-modal-body">
-                <p>${escapeHtml(message)}</p>
+                ${message}
             </div>
             <div class="result-modal-footer">
                 <button id="center-ok-btn" class="btn btn-primary">${escapeHtml(t('common.ok'))}</button>

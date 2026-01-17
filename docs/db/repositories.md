@@ -164,7 +164,49 @@ repo.set_stat("total_scripts", 10)
 all_stats = repo.get_all_stats()
 ```
 
-### 5. `NodeExecutionLogRepository`
+### 5. `LogStatsRepository`
+
+로그 통계 관련 데이터베이스 작업을 처리합니다.
+
+**파일**: `server/db/log_stats_repository.py`
+
+**주요 메서드:**
+- `get_stat(stat_key, default_value)`: 특정 통계 값 조회
+- `set_stat(stat_key, stat_value)`: 통계 값 설정 (UPSERT)
+- `get_all_stats()`: 모든 통계 값 조회
+- `update_all_stats(stats)`: 여러 통계 값을 한 번에 업데이트
+- `calculate_and_update_stats()`: 로그 통계를 계산하고 업데이트
+
+**특징:**
+- UPSERT 지원 (INSERT OR UPDATE)
+- 통계 키 기반 조회
+- 실행 기록 페이지 통계 계산
+
+**주요 통계 키:**
+- `total`: 전체 실행 개수 (execution_id 기준 고유 개수)
+- `completed`: 완료된 로그 개수 (노드 단위)
+- `failed`: 실패한 로그 개수 (노드 단위)
+- `average_execution_time`: 평균 실행 시간 (밀리초)
+
+**사용 예시:**
+```python
+from server.db.log_stats_repository import LogStatsRepository
+
+repo = LogStatsRepository(conn)
+
+# 통계 조회
+total = repo.get_stat("total", 0)
+completed = repo.get_stat("completed", 0)
+
+# 통계 설정
+repo.set_stat("total", 100)
+
+# 통계 계산 및 업데이트
+stats = repo.calculate_and_update_stats()
+# {'total': 10, 'completed': 8, 'failed': 2, 'average_execution_time': 1500}
+```
+
+### 6. `NodeExecutionLogRepository`
 
 노드 실행 로그 관련 데이터베이스 작업을 처리합니다.
 
@@ -234,9 +276,16 @@ deleted_count = repo.delete_all_logs()
 
 **주요 기능:**
 - 모든 리포지토리 인스턴스 관리
+  - `user_settings`: UserSettingsRepository
+  - `scripts`: ScriptRepository
+  - `nodes`: NodeRepository
+  - `dashboard_stats`: DashboardStatsRepository
+  - `node_execution_logs`: NodeExecutionLogRepository
+  - `log_stats`: LogStatsRepository
 - 데이터베이스 초기화
 - 예시 데이터 생성
 - 대시보드 통계 계산 및 업데이트 (`calculate_and_update_dashboard_stats()`)
+- 로그 통계 초기화 (`_initialize_log_stats()`)
 
 **사용 예시:**
 ```python

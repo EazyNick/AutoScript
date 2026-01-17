@@ -12,17 +12,19 @@
    - 시스템에 등록된 전체 스크립트 개수
    - `scripts` 테이블의 전체 레코드 수
 
-2. **오늘 실행 횟수** (Today's Run Count)
-   - 오늘 날짜에 실행된 스크립트 실행 횟수
-   - `script_executions` 테이블에서 오늘 날짜의 실행 기록 수
+2. **전체 실행 횟수** (All Executions)
+   - 전체 실행 시 실행된 스크립트 개수 (오늘 기준이 아닌 전체 실행 기준)
+   - `dashboard_stats` 테이블의 `all_executions` 값
 
-3. **오늘 실패한 스크립트** (Today's Failed Scripts)
-   - 오늘 날짜에 실행 실패한 고유 스크립트 개수
-   - `script_executions` 테이블에서 오늘 날짜의 실패 기록 중 고유 스크립트 수
+3. **전체 실패한 스크립트** (All Failed Scripts)
+   - 전체 실행 시 실패한 스크립트 개수 (오늘 기준이 아닌 전체 실행 기준)
+   - `dashboard_stats` 테이블의 `all_failed_scripts` 값
 
 4. **비활성 스크립트** (Inactive Scripts)
    - 현재 비활성화된 스크립트 개수
    - `scripts` 테이블에서 `active = 0`인 레코드 수
+
+> **참고**: 현재 구현은 "오늘 실행 횟수"가 아닌 "전체 실행 시 실행된 스크립트 개수"를 표시합니다. `dashboard_stats` 테이블에 `today_executions`, `today_failed_scripts` 키도 지원하지만, 대시보드 UI에서는 `all_executions`, `all_failed_scripts`를 사용합니다.
 
 ## DB 테이블 설계
 
@@ -45,8 +47,10 @@ ON dashboard_stats(updated_at);
 
 **저장되는 통계 키:**
 - `total_scripts`: 전체 워크플로우 개수
-- `today_executions`: 오늘 실행 횟수
-- `today_failed_scripts`: 오늘 실패한 스크립트 개수
+- `all_executions`: 전체 실행 시 실행된 스크립트 개수 (대시보드에서 사용)
+- `all_failed_scripts`: 전체 실행 시 실패한 스크립트 개수 (대시보드에서 사용)
+- `today_executions`: 오늘 실행 횟수 (서버에서 지원하지만 대시보드 UI에서는 미사용)
+- `today_failed_scripts`: 오늘 실패한 스크립트 개수 (서버에서 지원하지만 대시보드 UI에서는 미사용)
 - `inactive_scripts`: 비활성 스크립트 개수
 
 ### 2. `script_executions` 테이블 (기존 테이블 활용)
@@ -119,12 +123,12 @@ ON scripts(active);
 - `scripts` 테이블 변경 시 트리거
 
 #### 2.2 스크립트 실행 시
-- **오늘 실행 횟수** 업데이트
-- `script_executions` 테이블에 레코드 추가 시 트리거
+- **전체 실행 횟수** 업데이트 (`all_executions`)
+- `/api/dashboard/increment-execution` API 호출 시 업데이트
 
 #### 2.3 스크립트 실행 실패 시
-- **오늘 실패한 스크립트** 업데이트
-- `script_executions` 테이블에 `status = 'error'` 레코드 추가 시 트리거
+- **전체 실패한 스크립트** 업데이트 (`all_failed_scripts`)
+- `/api/dashboard/increment-execution` API 호출 시 `success: false`인 경우 업데이트
 
 #### 2.4 스크립트 활성/비활성 토글 시
 - **비활성 스크립트** 업데이트
@@ -157,15 +161,13 @@ def calculate_and_update_dashboard_stats(self) -> dict[str, int]:
     stats['total_scripts'] = total_scripts
     self.dashboard_stats_repo.set_stat('total_scripts', total_scripts)
     
-    # 2. 오늘 실행 횟수
-    today_executions = self.get_today_executions_count()
-    stats['today_executions'] = today_executions
-    self.dashboard_stats_repo.set_stat('today_executions', today_executions)
+    # 2. 전체 실행 횟수 (dashboard_stats 테이블에서 조회)
+    all_executions = self.dashboard_stats.get_stat('all_executions', 0)
+    stats['all_executions'] = all_executions
     
-    # 3. 오늘 실패한 스크립트 개수
-    today_failed = self.get_today_failed_scripts_count()
-    stats['today_failed_scripts'] = today_failed
-    self.dashboard_stats_repo.set_stat('today_failed_scripts', today_failed)
+    # 3. 전체 실패한 스크립트 개수 (dashboard_stats 테이블에서 조회)
+    all_failed_scripts = self.dashboard_stats.get_stat('all_failed_scripts', 0)
+    stats['all_failed_scripts'] = all_failed_scripts
     
     # 4. 비활성 스크립트 개수
     inactive_scripts = self.get_inactive_scripts_count()
@@ -252,10 +254,9 @@ def record_execution(self, script_id: int, status: str, error_message: str = Non
         'error_message': error_message
     })
     
-    # 통계 업데이트
-    self.db_manager.update_stat('today_executions')
-    if status == 'error':
-        self.db_manager.update_stat('today_failed_scripts')
+    # 통계 업데이트 (실제로는 /api/dashboard/increment-execution API를 통해 업데이트)
+    # 이 메서드는 현재 구현되지 않았으며, 실행 기록 저장 시 자동으로 통계가 업데이트되지 않음
+    # 대신 프론트엔드에서 실행 완료 후 `/api/dashboard/increment-execution` API를 호출하여 통계 업데이트
     
     return execution
 ```
@@ -288,8 +289,8 @@ async loadDashboardStats() {
         // 통계 데이터 설정
         this.executionStats = {
             totalScripts: stats.total_scripts || 0,
-            todayExecutions: stats.today_executions || 0,
-            todayFailed: stats.today_failed_scripts || 0,
+            allExecutions: stats.all_executions || 0, // 전체 실행 시 실행된 스크립트 개수
+            allFailed: stats.all_failed_scripts || 0, // 전체 실행 시 실패한 스크립트 개수
             inactiveScripts: stats.inactive_scripts || 0
         };
         
@@ -300,8 +301,8 @@ async loadDashboardStats() {
         // 실패 시 기본값 사용
         this.executionStats = {
             totalScripts: 0,
-            todayExecutions: 0,
-            todayFailed: 0,
+            allExecutions: 0,
+            allFailed: 0,
             inactiveScripts: 0
         };
     }
@@ -329,8 +330,8 @@ GET /api/dashboard/stats?use_cache=true
     "message": "대시보드 통계 조회 완료",
     "data": {
         "total_scripts": 3,
-        "today_executions": 12,
-        "today_failed_scripts": 1,
+        "all_executions": 12,
+        "all_failed_scripts": 1,
         "inactive_scripts": 0
     }
 }
@@ -436,11 +437,10 @@ schedule.every().day.at("00:00:00").do(reset_daily_stats)
 
 ### ⏳ 향후 구현 필요
 
-1. **실행 기록 저장 시 통계 업데이트**:
-   - `script_executions` 테이블에 레코드 추가 시:
-     - `today_executions` 통계 업데이트
-     - 실패 시 `today_failed_scripts` 통계 업데이트
-   - 현재는 실행 기록 저장 로직이 없으므로, 실행 기록 저장 기능 구현 시 함께 추가 필요
+1. **일일 자동 갱신 스케줄러**:
+   - 매일 자정에 `today_executions`, `today_failed_scripts` 초기화
+   - `server/services/scheduler_service.py` 생성 필요
+   - 현재는 `all_executions`, `all_failed_scripts`만 사용하므로 우선순위 낮음
 
 2. **일일 자동 갱신 스케줄러**:
    - 매일 자정에 `today_executions`, `today_failed_scripts` 초기화

@@ -531,8 +531,8 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
                     "success": {"type": "boolean", "description": "성공 여부"},
                     "matched_count": {"type": "number", "description": "매칭된 행 개수"},
                     "updated_count": {"type": "number", "description": "업데이트된 행 개수"},
-                    "source_execution_id": {"type": "string", "description": "원본 엑셀 실행 ID"},
-                    "target_execution_id": {"type": "string", "description": "대상 엑셀 실행 ID"},
+                    "source_file_path": {"type": "string", "description": "원본 엑셀 파일 경로"},
+                    "target_file_path": {"type": "string", "description": "대상 엑셀 파일 경로"},
                 },
             },
         },
@@ -592,24 +592,22 @@ NODES_CONFIG: dict[str, dict[str, Any]] = {
         },
     },
     "test-node": {
-        "test-node": {
-            "label": "Test Node",
-            "title": "Test Node",
-            "description": "Test node",
-            "script": "node-test-node.js",
-            "category": "action",
-            "is_boundary": False,
-            "input_schema": {
-                "action": {"type": "string", "description": "이전 노드 타입"},
-                "status": {"type": "string", "description": "이전 노드 실행 상태"},
-                "output": {"type": "any", "description": "이전 노드 출력 데이터"},
-            },
-            "output_schema": {
-                "action": {"type": "string", "description": "노드 타입"},
-                "status": {"type": "string", "description": "실행 상태"},
-                "output": {"type": "any", "description": "출력 데이터"},
-            },
-        }
+        "label": "Test Node",
+        "title": "Test Node",
+        "description": "Test node",
+        "script": "node-test-node.js",
+        "category": "action",
+        "is_boundary": False,
+        "input_schema": {
+            "action": {"type": "string", "description": "이전 노드 타입"},
+            "status": {"type": "string", "description": "이전 노드 실행 상태"},
+            "output": {"type": "any", "description": "이전 노드 출력 데이터"},
+        },
+        "output_schema": {
+            "action": {"type": "string", "description": "노드 타입"},
+            "status": {"type": "string", "description": "실행 상태"},
+            "output": {"type": "any", "description": "출력 데이터"},
+        },
     },
 }
 
