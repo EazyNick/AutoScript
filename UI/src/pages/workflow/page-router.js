@@ -354,6 +354,19 @@ export class PageRouter {
                 } else if (currentScript) {
                     // 스크립트 페이지로 이동할 때마다 현재 스크립트를 다시 로드 (초기화)
                     const loadService = window.workflowPage.loadService;
+
+                    // 노드 레지스트리 로딩 완료 대기
+                    const { getNodeRegistry } = await import('./services/node-registry.js');
+                    const registry = getNodeRegistry();
+                    try {
+                        logger.log('[PageRouter] 노드 레지스트리 로딩 완료 대기...');
+                        await registry.getNodeConfigs();
+                        logger.log('[PageRouter] 노드 레지스트리 로딩 완료');
+                    } catch (error) {
+                        logger.warn('[PageRouter] 노드 레지스트리 로딩 실패:', error);
+                        // 계속 진행 (폴백 설정 사용)
+                    }
+
                     if (!loadService.isLoading) {
                         // 이미 로드된 스크립트인 경우 기존 노드를 먼저 제거
                         if (loadService.isScriptLoaded(currentScript.id)) {
@@ -363,14 +376,14 @@ export class PageRouter {
                             );
                             const nodeManager = window.workflowPage.getNodeManager();
                             if (nodeManager) {
-                                loadService.clearExistingNodes(nodeManager);
+                                await loadService.clearExistingNodes(nodeManager);
                             }
                             // _lastLoadedScriptId를 초기화하여 강제로 다시 로드
                             loadService._lastLoadedScriptId = null;
                         } else {
                             logger.log('[PageRouter] 스크립트 페이지 초기화: 스크립트 로드 시작:', currentScript);
                         }
-                        await loadService.load(currentScript);
+                        await loadService.load(currentScript, false);
                     } else {
                         logger.log('[PageRouter] 이미 로딩 중입니다. 건너뜀');
                     }

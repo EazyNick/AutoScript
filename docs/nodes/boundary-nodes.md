@@ -96,18 +96,18 @@ async def execute(parameters: dict[str, Any]) -> dict[str, Any]:
 
 ### 경계 노드 시스템 (v0.0.6+)
 
-경계 노드는 `nodes_config.py`에서 `isBoundary: true` 속성으로 정의됩니다:
+경계 노드는 `nodes_config.py`에서 `is_boundary: true` 속성으로 정의됩니다:
 
 ```python
 "start": {
     "label": "시작 노드",
-    "isBoundary": True,  # 경계 노드로 표시
+    "is_boundary": True,  # 경계 노드로 표시
     ...
 }
 ```
 
 시스템은 다음과 같이 경계 노드를 처리합니다:
 
-1. **동적 인식**: `isBoundaryNodeSync()` 함수로 경계 노드 타입을 캐시하여 빠르게 확인
+1. **동적 인식**: `is_boundary_node()` 함수로 경계 노드 타입을 확인
 2. **자동 시작점**: 워크플로우 실행 시 경계 노드를 자동으로 찾아 시작점으로 사용
-3. **확장성**: 새로운 경계 노드 추가 시 코드 수정 없이 자동 인식
+3. **확장성**: 새로운 경계 노드 추가 시 `nodes_config.py`에 `is_boundary: True`만 추가하면 자동 인식

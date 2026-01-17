@@ -37,10 +37,12 @@
    - 드롭다운: "어떤 노드의 어떤 필드?"를 노드 이름/타입/스텝 순서로 그룹화해 선택
    - 필드 피커: 트리/자동완성으로 JSON 경로를 선택하도록 지원 (`result.output.data` 등)
    - 프리뷰: 선택한 필드의 샘플 값을 우측에 표시 (직전 실행 결과 or 모의 데이터)
-   - **구현 완료**: 엑셀 닫기 노드의 `execution_id` 파라미터에서 이전 노드 출력 변수를 선택할 수 있는 UI 추가
-     - 드롭다운 목록과 확장 버튼을 통한 직관적인 변수 선택
-     - 클릭 시 자동으로 파라미터 필드에 값 삽입 (예: `output.data.execution_id`)
-     - 이전 노드 출력에서 `execution_id` 같은 변수를 쉽게 선택하여 다음 노드에 전달 가능
+   - **구현 완료**: 이전 노드 출력 변수를 선택할 수 있는 UI 추가
+     - `field_path`, `execution_id` 같은 파라미터에서 이전 노드 출력 변수 선택 가능
+     - 드롭다운 목록과 확장 버튼을 통한 직관적인 변수 선택 (`parameter-form-generator.js`)
+     - 클릭 시 자동으로 파라미터 필드에 값 삽입 (예: `outdata.output.execution_id`)
+     - 이전 노드 출력에서 변수를 쉽게 선택하여 다음 노드에 전달 가능
+     - 구현 위치: `UI/src/pages/workflow/utils/parameter-form-generator.js`, `UI/src/pages/workflow/modals/node-settings-modal.js`
 
 ## 출력 미리보기 시스템
 
@@ -64,12 +66,15 @@
    - 타입별 위젯: text/number/boolean/date/file/token/secret 등
    - 플레이스홀더/예시 값 제공, required 표기 + 인라인 검증
    - 멀티라인/코드 편집(예: JSON) 시 포맷 검증과 미리보기 제공
+   - **구현 완료**: 파라미터 폼에서 직접 입력 가능 (`parameter-form-generator.js`)
 3. **선택지 제공 (옵션/프리셋)**
    - select/radio/button group으로 사전 정의된 옵션 제공
    - 옵션 설명/샘플 결과를 함께 표시해 선택 도움
+   - **구현 완료**: `nodes_config.py`의 `options` 필드로 드롭다운 제공
 4. **혼합 모드**
    - 기본값은 이전 노드 출력, 없으면 사용자 입력 fallback
    - 템플릿 문자열 지원: `Hello, {{prev.node.output.name}}` 형태
+   - **현재 상태**: 템플릿 문자열은 미구현, 이전 노드 출력 변수 선택은 구현됨
 
 ## 출력 프리뷰/정규화
 - 노드 설정 모달 하단에 "예상 출력" 영역 제공
@@ -149,13 +154,16 @@ type NodeRunContext = {
 - 스트리밍 지원 시 `out:items[]`는 지연 평가 가능, UI는 점진 렌더
 
 ## 바인딩 표현식: 2트랙
-- 기본(템플릿): `{{nodeA.output.data.user.name}}`
-- 고급(JSONPath/JMESPath): `$.output.data.users[?status=='ACTIVE'].id`
-- UI는 기본/고급 토글, 경로 선택기 + 미리보기 제공
+- 기본(템플릿): `{{nodeA.output.data.user.name}}` - **미구현**
+- 고급(JSONPath/JMESPath): `$.output.data.users[?status=='ACTIVE'].id` - **미구현**
+- **현재 구현**: 이전 노드 출력 변수 선택 UI (드롭다운 방식)
+  - `outdata.output.execution_id` 같은 경로 문자열 직접 입력
+  - 드롭다운으로 이전 노드 출력 변수 선택 가능
+  - 구현 위치: `UI/src/pages/workflow/utils/parameter-form-generator.js`
 - 평가 규칙:
-  - 템플릿은 값이 없을 경우 기본값 필터 지원 `| default:"..."`.
-  - JSONPath/JMESPath는 결과가 없으면 `null` 반환, 에러는 즉시 경고.
-  - 보안: 시크릿/PII 경로는 프리뷰에서 마스킹, 실제 실행 시에만 언마스킹.
+  - 템플릿은 값이 없을 경우 기본값 필터 지원 `| default:"..."` - **미구현**
+  - JSONPath/JMESPath는 결과가 없으면 `null` 반환, 에러는 즉시 경고 - **미구현**
+  - 보안: 시크릿/PII 경로는 프리뷰에서 마스킹, 실제 실행 시에만 언마스킹 - **미구현**
 
 ## 타입 시스템: JSON Schema + coercion
 - 입력/출력 스키마를 JSON Schema로 정의, 프론트/백엔드 동일 검증
@@ -188,11 +196,12 @@ type NodeRunContext = {
 - 감사 로그에 secret 값은 기록하지 않고 key/ref만 기록
 
 ## 프리뷰 엔진 정책
-- 기본은 dry-run/mock connector, 네트워크 호출 OFF
-- 사용자 동의 시에만 외부 호출 허용
-- PII/시크릿 마스킹 기본 적용
-- 리소스 제한: 타임아웃/호출 횟수/응답 크기 제한 명시
-- 프리뷰 실패 시 graceful fallback(샘플 데이터/스키마 기반) 제공
+- **현재 구현**: 스키마 기반 예시 데이터 생성 (dry-run/mock 미구현)
+- 기본은 스키마 기반 샘플 데이터 생성, 네트워크 호출 없음
+- 실제 실행 결과가 있으면 우선 사용 (최근 실행 결과)
+- PII/시크릿 마스킹은 미구현 (향후 구현 예정)
+- 리소스 제한: 미구현 (향후 구현 예정)
+- 프리뷰 실패 시 graceful fallback: 스키마 기반 기본값 제공 (구현됨)
 
 ## 변수/상수 레이어
 - 데이터 소스 탭 확장: 이전 노드 / 직접 입력 / 프리셋 / 변수 / 환경 / 시크릿
@@ -230,12 +239,25 @@ export const HttpRequestNode = {
 ```
 
 ## 단계별 적용 가이드
+
+### ✅ 구현 완료
+1. **이전 노드 출력 변수 선택**: 드롭다운 방식으로 이전 노드 출력 변수 선택 가능
+   - 구현 위치: `UI/src/pages/workflow/utils/parameter-form-generator.js`
+   - 사용 예: `execution_id`, `field_path` 같은 파라미터에서 사용
+2. **출력 미리보기**: 스키마 기반 출력 미리보기 자동 생성
+   - 구현 위치: `UI/src/pages/workflow/config/node-preview-generator.js`
+   - 파라미터 변경 시 자동 업데이트 (300ms debounce)
+3. **입력 미리보기**: 이전 노드 출력 스키마 기반 입력 미리보기 생성
+   - "이전 노드에서 가져오기" 버튼으로 자동 생성
+   - 구현 위치: `UI/src/pages/workflow/modals/node-settings-modal.js`
+
+### ⏳ 향후 구현 필요
 1. 파라미터 메타데이터에 `source` 필드를 추가하여 입력 방식(이전 노드/직접/프리셋)을 정의
-2. 워크플로우 컨텍스트(그래프)에서 이전 노드 출력 트리를 수집하는 헬퍼 제공
+2. 워크플로우 컨텍스트(그래프)에서 이전 노드 출력 트리를 수집하는 헬퍼 제공 (일부 구현됨)
 3. 노드 설정 모달에서 소스 선택 탭 → 필드 피커/위젯 렌더 → 즉시 검증
 4. 템플릿 문자열 지원 시, 입력 변경마다 프리뷰 엔진으로 결과 평가 및 오류 표시
 5. 저장 시 최종 검증 → 오류가 있으면 필드로 스크롤/포커스 이동
-6. 실행 전 프리뷰를 제공하여 사용자가 실제 실행 없이 결과 형태를 확인할 수 있게 함
+6. 실행 전 프리뷰를 제공하여 사용자가 실제 실행 없이 결과 형태를 확인할 수 있게 함 (스키마 기반은 구현됨)
 
 ## 예시 템플릿 패턴
 - 순수 바인딩: `{{previousNode.output.url}}`

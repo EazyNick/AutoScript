@@ -153,11 +153,14 @@ ignore = ["E501"]  # 라인 길이 제한 무시
 ### mypy 실행
 
 ```bash
-# 전체 프로젝트 타입 체크
-mypy server/
+# 전체 프로젝트 타입 체크 (에러 코드 표시)
+python -m mypy server/ --show-error-codes
 
 # 특정 파일만 확인
-mypy server/main.py
+python -m mypy server/main.py --show-error-codes
+
+# 또는 직접 mypy 명령어 사용 (가상환경에 설치된 경우)
+mypy server/ --show-error-codes
 ```
 
 ### 설정
@@ -204,7 +207,7 @@ jobs:
           ruff format --check server/
       - name: Type check
         run: |
-          mypy server/
+          python -m mypy server/ --show-error-codes
 ```
 
 ### 로컬에서 CI 검사 실행
@@ -218,6 +221,9 @@ ruff format --check server/
 
 # 둘 다 실행
 ruff check server/ && ruff format --check server/
+
+# 타입 체크 포함
+ruff check server/ && ruff format --check server/ && python -m mypy server/ --show-error-codes
 ```
 
 ## 문제 해결
@@ -275,13 +281,13 @@ ruff format server/
 ruff check server/
 
 # 4단계: 타입 체크
-mypy server/
+python -m mypy server/ --show-error-codes
 ```
 
 #### 3. 문제 해결
 
 - **ruff 에러**: `ruff check --fix server/`로 자동 수정 시도
-- **타입 에러**: mypy가 지적한 부분에 타입 힌트 추가
+- **타입 에러**: `python -m mypy server/ --show-error-codes`로 확인 후 타입 힌트 추가
 - **포매팅 문제**: `ruff format server/`로 자동 포매팅
 
 ## 자동화
@@ -365,9 +371,11 @@ lint-all.bat
 
 1. **[1/5] Python linting check and auto-fix**: `ruff check --fix server/`
 2. **[2/5] Python formatting**: `ruff format server/`
-3. **[3/5] Mypy type checking**: `mypy server/` (mypy가 설치되어 있는 경우)
+3. **[3/5] Mypy type checking**: `mypy server/` 또는 `python -m mypy server/` (mypy가 설치되어 있는 경우, lint-all.bat에서는 `--show-error-codes` 옵션 없음)
 4. **[4/5] JavaScript linting check and auto-fix**: `npm run lint:fix` (UI 폴더에서)
 5. **[5/5] JavaScript formatting**: `npm run format` (UI 폴더에서)
+
+> **참고**: `lint-all.bat`는 JavaScript 포매팅 확인(`format:check`)을 실행하지 않습니다. 수동으로 확인하려면 `cd UI && npm run format:check`를 실행하세요.
 
 #### 특징
 
@@ -408,7 +416,7 @@ lint-all.bat
 1. **Ruff 자동 수정**: `ruff check --fix server/`
 2. **Ruff 포매팅**: `ruff format server/`
 3. **Ruff 검사**: `ruff check server/`
-4. **Mypy 타입 체크**: `mypy server/`
+4. **Mypy 타입 체크**: `python -m mypy server/ --show-error-codes`
 
 모든 단계가 통과해야 커밋이 진행됩니다.
 
@@ -448,8 +456,9 @@ lint-all.bat
 
 1. **가상환경 확인**
    ```bash
-   # 가상환경이 있는지 확인 (반드시 'venv' 이름 사용)
+   # 가상환경이 있는지 확인 (venv, .venv, env, ENV 등 지원)
    ls -la venv  # Windows: dir venv
+   # 또는 .venv, env 등도 자동으로 감지됩니다
    ```
 
 2. **가상환경 활성화 후 수동 실행**
@@ -464,12 +473,16 @@ lint-all.bat
    python scripts/linting/lint.py
    ```
 
-> **중요**: 가상환경 이름은 반드시 `venv`로 생성해야 합니다. 다른 이름을 사용하면 자동 스크립트가 가상환경을 찾지 못할 수 있습니다.
+> **참고**: 스크립트는 `venv`, `.venv`, `env`, `ENV` 등 일반적인 가상환경 이름을 자동으로 감지합니다. `.`으로 시작하는 디렉토리도 자동으로 검색합니다.
 
 3. **ruff와 mypy 설치 확인**
    ```bash
    pip list | grep ruff
    pip list | grep mypy
+   
+   # 또는 직접 실행하여 확인
+   python -m ruff --version
+   python -m mypy --version
    ```
 
 ## 참고 자료
@@ -488,4 +501,4 @@ Python 코드를 기여하기 전에 다음을 확인하세요:
 - [ ] `ruff format server/` 실행하여 코드 포매팅
 - [ ] `ruff check server/` 실행하여 남은 문제가 없는지 확인
 - [ ] `ruff format --check server/` 실행하여 포매팅이 올바른지 확인
-- [ ] `mypy server/` 실행하여 타입 체크 통과 확인
+- [ ] `python -m mypy server/ --show-error-codes` 실행하여 타입 체크 통과 확인

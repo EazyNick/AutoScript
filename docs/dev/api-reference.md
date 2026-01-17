@@ -800,11 +800,12 @@ DELETE /api/config/user-settings/{setting_key}
 
 ## 지원 노드 타입
 
-- **경계 노드**: `start`, `end`
+- **경계 노드**: `start` (종료 노드는 더 이상 사용되지 않음)
 - **액션 노드**: `image-touch`, `process-focus`
 - **대기 노드**: `wait`
 - **조건 노드**: `condition`
 - **반복 노드**: `repeat`
+- **엑셀 노드**: `excel-open`, `excel-select-sheet`, `excel-close`, `excel-compare`
 
 ## 관련 문서
 

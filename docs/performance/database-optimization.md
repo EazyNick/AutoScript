@@ -95,6 +95,10 @@ CREATE INDEX IF NOT EXISTS idx_nodes_type ON nodes(node_type);
 
 -- 복합 인덱스: 스크립트 + 타입 조회
 CREATE INDEX IF NOT EXISTS idx_nodes_script_type ON nodes(script_id, node_type);
+
+-- 연결 정보 관련 인덱스
+CREATE INDEX IF NOT EXISTS idx_nodes_connection_seq ON nodes(connection_sequence);
+CREATE INDEX IF NOT EXISTS idx_nodes_is_connected ON nodes(is_connected);
 ```
 
 **효과**:

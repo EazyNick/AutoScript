@@ -46,7 +46,7 @@
 
 **2. 프론트엔드 측 (workflow-execution-service.js)**
 - 반복 노드 실행 결과를 받아 `repeat_count`를 확인합니다
-- 반복 노드의 하위 연결점(bottom-output)에 연결된 노드를 찾습니다
+- 반복 노드의 하위 연결점(bottom-output)에 연결된 노드를 찾습니다 (`has_bottom_output: True` 속성으로 인식)
 - 연결을 따라가며 반복할 노드 체인을 수집합니다 (BFS 방식)
 - 각 반복마다:
   - 반복 정보 메타데이터(`repeat_info`)를 각 노드에 추가합니다
