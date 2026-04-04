@@ -54,6 +54,8 @@ Thumbs.db
 # 로그 파일
 *.log
 logs/
+!UI/src/logs/
+!UI/src/logs/**
 
 # 임시 파일
 *.tmp
