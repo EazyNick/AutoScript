@@ -24,6 +24,13 @@ export class NodeCreationService {
         const createdNode = nodeManager.createNode(nodeData);
         const nodeType = nodeData.type;
 
+        // "시작 노드 자동 생성" 같은 내부 로드용 함수(createDefaultBoundaryNodes)에서는 이 이벤트를 쏘지 않음.
+        // 사용자가 직접 노드를 추가했을 때만 쏴서 → WorkflowPage가 "그래프가 바뀌었다"고 인식하고 서버 자동 저장 예약.
+        const canvas = nodeManager.canvas;
+        if (canvas && createdNode) {
+            canvas.dispatchEvent(new CustomEvent('workflowGraphChanged', { bubbles: true }));
+        }
+
         // 이미지 터치 노드인 경우 이미지 개수 확인 및 표시
         if (nodeType === NODE_TYPES.IMAGE_TOUCH && nodeData.folder_path) {
             this.updateImageCountForNode(createdNode, nodeData, nodeManager);

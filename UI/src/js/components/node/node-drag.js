@@ -325,6 +325,14 @@ export class NodeDragController {
             // 최종 위치 저장 (nodeData에 반영)
             this.saveFinalPosition(node);
 
+            // 커스텀 이벤트 이름: workflowGraphChanged (= "워크플로 그림이 바뀌었음" 신호)
+            // WorkflowPage가 캔버스에 리스너를 달아 두고, 이 신호가 오면 잠시 뒤 서버에 자동 저장함.
+            // 노드만 옮기고 바로 다른 탭으로 가면, "페이지 이탈 저장"만으로는 타이밍이 어긋날 수 있어 여기서도 알림.
+            const canvas = this.nodeManager?.canvas;
+            if (canvas) {
+                canvas.dispatchEvent(new CustomEvent('workflowGraphChanged', { bubbles: true }));
+            }
+
             // Undo/Redo: 드래그 종료 후 스냅샷 저장
             // workflowPage를 여러 소스에서 찾기
             const workflowPage = this.nodeManager.workflowPage || window.workflowPage;

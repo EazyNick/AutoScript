@@ -83,6 +83,16 @@ export class WorkflowPage {
         this._initialized = false; // 중복 초기화 방지 플래그
         this._eventListenersSetup = false; // 이벤트 리스너 중복 등록 방지 플래그
         this._scriptChangedHandler = null; // scriptChanged 이벤트 핸들러 (중복 등록 방지용)
+        // --- 아래 세 변수: "저장 버튼 안 눌러도 서버에 맞춰 두기" 기능용 (초보자용 설명) ---
+        // 워크플로우는 DB에 있어서, 저장 안 하면 다른 화면 갔다 오면 예전 데이터가 보일 수 있음.
+        this._workflowPersistTimer = null; // "800ms 뒤에 저장" 예약이 있으면 여기 들어감 → 취소할 때 사용
+        this._workflowGraphListenersBound = false; // 캔버스에 같은 리스너를 두 번 붙이지 않기 위한 플래그
+        this._visibilityPersistBound = false; // 브라우저 탭 전환 감지 리스너는 페이지당 한 번만
+
+        // scriptChanged 이벤트 직렬화: 결론 — 저장·로드를 동시에 여러 번 돌리지 않고 큐(FIFO)로 한 건씩 처리한다.
+        // 이유 — 연속 클릭 시 이전 스크립트 저장과 다음 스크립트 로드 순서가 뒤섞이면 캔버스와 DB가 어긋날 수 있다.
+        this._scriptChangeQueue = [];
+        this._scriptChangeDraining = false;
 
         this.init();
     }
@@ -297,6 +307,23 @@ export class WorkflowPage {
             document.addEventListener('scriptChanged', this._scriptChangedHandler);
         }
 
+        // 사용자가 크롬에서 다른 탭으로 갈 때: 이 앱의 "스크립트 편집" 화면이 잠깐 안 보이게 됨.
+        // 그때도 한 번 서버에 저장해 두면, 탭 돌아왔을 때/새로고침 시 데이터가 덜 날아감.
+        // (앱 안에서 대시보드로 가는 것과는 별개 동작임 — 그쪽은 page-router가 처리)
+        if (!this._visibilityPersistBound) {
+            this._visibilityPersistBound = true;
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState !== 'hidden') {
+                    return;
+                }
+                const pr = window.pageRouter;
+                if (!pr || pr.currentPage !== 'editor') {
+                    return;
+                }
+                void window.workflowPage?.persistWorkflowToServerSilently?.();
+            });
+        }
+
         log('[WorkflowPage] ✅ 컴포넌트 이벤트 리스너 설정 완료');
     }
 
@@ -319,10 +346,91 @@ export class WorkflowPage {
             if (nodeManager) {
                 nodeManager.setWorkflowPage(this);
                 log('[WorkflowPage] ✅ NodeManager에 WorkflowPage 설정 완료');
+                // 캔버스 DOM이 늦게 생기면 이벤트를 못 붙이므로, 준비될 때까지 재시도하며 "연결/이동 시 자동 저장" 연결
+                this.tryBindWorkflowGraphAutoPersist(0);
             } else {
                 log('[WorkflowPage] ⚠️ NodeManager를 찾을 수 없습니다');
             }
         }, 100);
+    }
+
+    /**
+     * 캔버스에 "그래프가 바뀌었다"는 신호가 오면, 잠시 뒤 서버에 자동 저장하도록 연결합니다.
+     *
+     * - 연결 만들기/끊기 → ConnectionManager가 connectionCreated / connectionDeleted 이벤트 발생
+     * - 노드 옮기기 / 노드 추가 → 코드에서 workflowGraphChanged 이벤트를 직접 발생 (node-drag, node-creation-service)
+     */
+    tryBindWorkflowGraphAutoPersist(attempt) {
+        if (this._workflowGraphListenersBound) {
+            return;
+        }
+        const nodeManager = getNodeManager();
+        const canvas = nodeManager?.canvas;
+        if (!canvas) {
+            // 초기 로드 순서상 canvas가 아직 없을 수 있음 → 짧은 간격으로 재시도
+            if (attempt < 40) {
+                setTimeout(() => this.tryBindWorkflowGraphAutoPersist(attempt + 1), TIMING_CONSTANTS.DEFAULT_DELAY);
+            }
+            return;
+        }
+        this._workflowGraphListenersBound = true;
+        const onGraphChange = () => this.scheduleDebouncedPersistWorkflowToServer();
+        canvas.addEventListener('connectionCreated', onGraphChange);
+        canvas.addEventListener('connectionDeleted', onGraphChange);
+        canvas.addEventListener('workflowGraphChanged', onGraphChange);
+    }
+
+    /**
+     * debounce(디바운스): 이벤트가 여러 번 연달아 와도, 마지막으로부터 800ms 조용해진 뒤에 한 번만 저장.
+     * 비유: 연필로 글자 쓸 때마다 서버에 보내지 않고, 잠깐 멈췄을 때만 보내는 것.
+     */
+    scheduleDebouncedPersistWorkflowToServer() {
+        if (this._workflowPersistTimer) {
+            clearTimeout(this._workflowPersistTimer);
+        }
+        this._workflowPersistTimer = setTimeout(() => {
+            this._workflowPersistTimer = null;
+            void this.persistWorkflowToServerSilently();
+        }, 800);
+    }
+
+    /**
+     * 저장 버튼과 같은 API(서버의 노드 일괄 저장)를 쓰지만, 토스트/팝업은 띄우지 않음 = "조용한 자동 저장".
+     *
+     * 호출되는 경우 예시:
+     * - 대시보드 등 다른 메뉴로 나가기 직전 (page-router)
+     * - 브라우저 탭 전환 (visibilitychange)
+     * - 노드 연결·이동·추가 후 800ms 뒤 (위 debounce)
+     * - 사이드바에서 다른 스크립트 고르기 직전 (onScriptChanged) — 이때는 scriptIdOverride로 예전 스크립트 번호를 넘김
+     *
+     * @param {number|string|null} [scriptIdOverride] - 넘기면 "지금 사이드바 선택"이 아니라 이 ID로 저장 (스크립트 전환 순간용)
+     */
+    async persistWorkflowToServerSilently(scriptIdOverride = null) {
+        const script = this.getCurrentScript();
+        if (!this.saveService) {
+            return;
+        }
+        // scriptIdOverride가 있으면 그게 저장 대상, 없으면 현재 사이드바에 맞는 스크립트
+        const effectiveId = scriptIdOverride != null ? scriptIdOverride : script?.id;
+        if (effectiveId == null) {
+            return;
+        }
+        // Undo로 과거 상태를 되살리는 중에 서버 저장이 끼면 꼬일 수 있어서 건너뜀
+        const undoRedo = this.getUndoRedoService?.();
+        if (undoRedo?.isRestoring) {
+            return;
+        }
+        const logger = this.getLogger();
+        try {
+            const opts = { useToast: false, showAlert: false };
+            if (scriptIdOverride != null) {
+                // WorkflowSaveService.save() 안에서 이 ID로 updateNodesBatch가 호출됨
+                opts.scriptId = scriptIdOverride;
+            }
+            await this.saveService.save(opts);
+        } catch (error) {
+            logger.warn('[WorkflowPage] 자동 저장 실패:', error);
+        }
     }
 
     /**
@@ -586,55 +694,73 @@ export class WorkflowPage {
     }
 
     /**
-     * 스크립트 변경 처리
-     * 사이드바에서 스크립트 선택 시 호출됩니다.
-     * @param {Event} event - scriptChanged 이벤트 객체
+     * 스크립트 변경 처리 (사이드바 선택)
+     *
+     * 결론: detail을 큐에 넣고, 이미 처리 루프가 돌고 있으면 여기서는 return만 한다.
+     * 이유: A→B→C를 빠르게 눌러도 applySingleScriptChange는 A→B, B→C 순으로만 실행되어 저장/로드가 겹치지 않는다.
      */
     async onScriptChanged(event) {
+        this._scriptChangeQueue.push(event.detail);
+
+        if (this._scriptChangeDraining) {
+            return;
+        }
+        this._scriptChangeDraining = true;
+
+        try {
+            while (this._scriptChangeQueue.length > 0) {
+                const detail = this._scriptChangeQueue.shift();
+                await this.applySingleScriptChange(detail);
+            }
+        } finally {
+            this._scriptChangeDraining = false;
+        }
+    }
+
+    /**
+     * 스크립트 한 번 바꿀 때의 실제 작업
+     *
+     * 순서: (1) 레지스트리 대기 (2) 이미 같은 스크립트면 생략 (3) 이전 스크립트 로컬+서버 저장 (4) loadScriptData
+     */
+    async applySingleScriptChange(detail) {
         const logger = this.getLogger();
         const log = logger.log;
 
-        const { script, previousScript, forceReload = false } = event.detail;
+        const { script, previousScript, forceReload = false } = detail;
 
-        log('[WorkflowPage] onScriptChanged() 호출됨');
-        log('[WorkflowPage] 현재 스크립트:', script);
-        log('[WorkflowPage] 이전 스크립트:', previousScript);
-        log('[WorkflowPage] 강제 재로드:', forceReload);
+        log('[WorkflowPage] applySingleScriptChange()', { script, previousScript, forceReload });
 
-        // 유효성 검사
         if (!script || !script.id) {
             log('[WorkflowPage] ⚠️ 유효하지 않은 스크립트 정보. 건너뜀');
             return;
         }
 
-        // 노드 레지스트리 로딩 완료 대기 (팔레트에 노드가 표시되도록)
         const registry = getNodeRegistry();
         try {
-            log('[WorkflowPage] 노드 레지스트리 로딩 완료 대기...');
             await registry.getNodeConfigs();
-            log('[WorkflowPage] 노드 레지스트리 로딩 완료');
         } catch (error) {
             logger.warn('[WorkflowPage] 노드 레지스트리 로딩 실패:', error);
-            // 계속 진행 (폴백 설정 사용)
         }
 
-        // 중복 로드 방지 (강제 재로드가 아닌 경우에만)
         if (this.loadService && !forceReload) {
-            // 이미 같은 스크립트가 로드되었으면 건너뛰기
             if (this.loadService.isScriptLoaded(script.id)) {
-                log('[WorkflowPage] 같은 스크립트가 이미 로드되었습니다. 중복 로드 방지:', script.id);
+                log('[WorkflowPage] 같은 스크립트가 이미 로드됨. 건너뜀:', script.id);
                 return;
             }
         }
 
-        // 이전 스크립트가 있으면 저장 후 새 스크립트 로드
-        if (previousScript) {
+        // 이전 스크립트: 결론 — 캔버스에 남아 있는 그래프를 반드시 previousScript.id로 서버에 남긴 뒤 새 스크립트를 연다.
+        // (사이드바 선택은 이미 바뀐 뒤라 persistWorkflowToServerSilently에 id를 명시한다.)
+        if (previousScript && previousScript.id) {
+            if (this._workflowPersistTimer) {
+                clearTimeout(this._workflowPersistTimer);
+                this._workflowPersistTimer = null;
+            }
             this.saveWorkflowForScript(previousScript);
-            // 짧은 딜레이 후 로드 (저장 완료 대기)
+            await this.persistWorkflowToServerSilently(previousScript.id);
             await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
-        // 스크립트 로드 (강제 재로드 플래그 전달)
         await this.loadScriptData(script, forceReload);
     }
 
