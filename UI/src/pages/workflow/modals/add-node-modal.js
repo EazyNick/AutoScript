@@ -10,6 +10,7 @@ import { getNodeRegistry } from '../services/node-registry.js';
 import { getDetailNodeTypes, getDetailNodeConfig } from '../config/action-node-types.js';
 import { generateParameterForm, extractParameterValues } from '../utils/parameter-form-generator.js';
 import { generatePreviewFromSchema, collectPreviousNodeOutput } from '../config/node-preview-generator.js';
+import { ViewportUtils } from '../utils/viewport-utils.js';
 
 export class AddNodeModal {
     constructor(workflowPage) {
@@ -829,13 +830,16 @@ export class AddNodeModal {
             nodeId = `${shortType}_${Date.now()}`;
         }
 
+        // 캔버스 중앙 좌표 계산 및 겹침 방지
+        const centerPosition = this.calculateNodePosition();
+
         const nodeData = {
             id: nodeId,
             type: nodeType,
             title: nodeTitle,
             description: nodeDescription,
-            x: Math.random() * 400 + 100,
-            y: Math.random() * 300 + 100
+            x: centerPosition.x,
+            y: centerPosition.y
         };
 
         // 상세 노드 타입이 선택된 경우 추가
@@ -1084,5 +1088,86 @@ export class AddNodeModal {
 
         // 다른 상세 노드 타입의 경우 빈 문자열 반환
         return '';
+    }
+
+    /**
+     * 노드 생성 위치 계산 (캔버스 중앙, 겹침 방지)
+     * @returns {{x: number, y: number}} 노드 위치 좌표
+     */
+    calculateNodePosition() {
+        const nodeManager = this.workflowPage.getNodeManager();
+        if (!nodeManager || !nodeManager.canvas) {
+            // 폴백: 기본 위치
+            return { x: 400, y: 300 };
+        }
+
+        const canvas = nodeManager.canvas;
+        const canvasRect = canvas.getBoundingClientRect();
+
+        // 현재 뷰포트 위치 가져오기
+        const viewportData = ViewportUtils.getCurrentViewportPosition();
+
+        // 캔버스의 뷰포트 중앙 좌표 계산
+        // 화면에 보이는 캔버스 영역의 중앙 = 캔버스 크기 / 2 - transform
+        const viewportCenterX = canvasRect.width / 2 - viewportData.x;
+        const viewportCenterY = canvasRect.height / 2 - viewportData.y;
+
+        // 노드 크기 추정 (실제 노드 크기는 생성 후 알 수 있으므로 일반적인 크기 사용)
+        const estimatedNodeWidth = 200;
+        const estimatedNodeHeight = 100;
+        const padding = 50; // 노드 간 최소 간격
+
+        // 중앙 위치에서 시작
+        let x = viewportCenterX - estimatedNodeWidth / 2;
+        let y = viewportCenterY - estimatedNodeHeight / 2;
+
+        // 기존 노드들과 겹치는지 확인
+        const existingNodes = nodeManager.nodes || [];
+        let attempts = 0;
+        const maxAttempts = 50; // 최대 시도 횟수
+        const stepSize = 100; // 각 시도마다 이동할 거리
+
+        while (attempts < maxAttempts) {
+            let hasCollision = false;
+
+            // 기존 노드들과 겹치는지 확인
+            for (const nodeObj of existingNodes) {
+                const nodeElement = nodeObj.element;
+                if (!nodeElement) {
+                    continue;
+                }
+
+                const nodeX = parseInt(nodeElement.style.left) || 0;
+                const nodeY = parseInt(nodeElement.style.top) || 0;
+                const nodeWidth = nodeElement.offsetWidth || estimatedNodeWidth;
+                const nodeHeight = nodeElement.offsetHeight || estimatedNodeHeight;
+
+                // 겹침 확인 (padding 포함)
+                if (
+                    x < nodeX + nodeWidth + padding &&
+                    x + estimatedNodeWidth + padding > nodeX &&
+                    y < nodeY + nodeHeight + padding &&
+                    y + estimatedNodeHeight + padding > nodeY
+                ) {
+                    hasCollision = true;
+                    break;
+                }
+            }
+
+            // 겹치지 않으면 현재 위치 반환
+            if (!hasCollision) {
+                return { x, y };
+            }
+
+            // 겹치면 나선형으로 위치 이동 (중앙에서 점점 멀어지는 패턴)
+            attempts++;
+            const angle = attempts * 0.5 * Math.PI; // 각도
+            const radius = stepSize * Math.sqrt(attempts); // 반지름 (점점 커짐)
+            x = viewportCenterX - estimatedNodeWidth / 2 + Math.cos(angle) * radius;
+            y = viewportCenterY - estimatedNodeHeight / 2 + Math.sin(angle) * radius;
+        }
+
+        // 최대 시도 횟수에 도달하면 마지막 위치 반환
+        return { x, y };
     }
 }
