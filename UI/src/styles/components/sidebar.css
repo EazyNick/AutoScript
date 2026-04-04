@@ -146,25 +146,22 @@
 /* 스크립트 목록 컨테이너: 스크립트 항목들이 표시되는 스크롤 가능한 영역 */
 .script-list {
     flex: 1;
-    padding: 20px;
+    padding: 10px 0;
     overflow-y: auto;
 }
 
-/* 스크립트 항목: 각 스크립트를 나타내는 카드 형태의 항목 */
+/* 스크립트 항목: 각 스크립트를 나타내는 리스트 형태의 항목 */
 .script-item {
-    background-color: #1a202c;
-    border-radius: 12px;
-    padding: 20px;
-    padding-left: 20px;
-    margin-bottom: 15px;
+    padding: 12px 20px;
     cursor: pointer;
     transition: all 0.3s ease;
-    border: 2px solid transparent;
+    border-bottom: 1px solid #4a5568;
     display: flex;
     gap: 15px;
     align-items: flex-start;
     position: relative;
     user-select: none;
+    background-color: transparent;
 }
 
 /* 스크립트 항목 드래그 중 상태: 드래그하고 있을 때 반투명하게 표시 */
@@ -227,17 +224,14 @@
     opacity: 1;
 }
 
-/* 스크립트 항목 호버 효과: 마우스를 올렸을 때 배경색 변경 및 살짝 위로 이동 */
+/* 스크립트 항목 호버 효과: 마우스를 올렸을 때 배경색 변경 */
 .script-item:hover {
-    background-color: #2d3748;
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    background-color: #374151;
 }
 
 /* 스크립트 항목 활성 상태: 현재 선택된 스크립트 */
 .script-item.active {
-    border-color: #3182ce;
-    background-color: #2d3748;
+    background-color: #374151;
 }
 
 /* 스크립트 항목 비활성화 상태: DB에서 active = 0인 스크립트 */
@@ -246,10 +240,26 @@
     filter: grayscale(0.3);
 }
 
-/* 스크립트 아이콘: 각 스크립트 항목 왼쪽에 표시되는 문서 아이콘(📄) */
+/* 스크립트 아이콘: 각 스크립트 항목 왼쪽에 표시되는 파일 형태 아이콘 */
 .script-icon {
-    font-size: 24px;
-    margin-top: 2px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    position: relative;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.script-item:hover .script-icon,
+.script-item.active .script-icon {
+    background-color: rgba(49, 130, 206, 0.2);
+    color: #ffffff;
 }
 
 /* 스크립트 정보 컨테이너: 스크립트 이름, 설명, 날짜를 포함하는 영역 */

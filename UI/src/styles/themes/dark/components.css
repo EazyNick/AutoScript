@@ -76,5 +76,12 @@ body.theme-dark .script-item.inactive .script-date {
 
 body.theme-dark .script-item.inactive:hover {
     opacity: 0.6;
-    background-color: #2d3748;
+    background-color: #374151;
 }
+
+body.theme-dark .script-item:hover .script-icon,
+body.theme-dark .script-item.active .script-icon {
+    background-color: rgba(56, 189, 248, 0.18);
+    color: #ffffff;
+}
+
