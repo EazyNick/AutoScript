@@ -42,15 +42,94 @@ export class SidebarUIManager {
      */
     loadScripts() {
         this.currentPage = 1; // 스크립트 로드 시 첫 페이지로 초기화
-        this.updateItemsPerPage();
+
+        // 초기 로딩 시 안전한 기본값 사용 (UI 깜빡임 방지)
+        this.itemsPerPage = 10;
+
+        // 먼저 요소들을 렌더링
         this.renderScriptsPage();
         this.updatePagination();
+
+        // DOM 레이아웃이 완전히 안정화된 후 정확한 높이 계산 및 재렌더링
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.updateItemsPerPage();
+                this.renderScriptsPage();
+                this.updatePagination();
+            });
+        });
 
         // ResizeObserver를 sidebar-scripts-section에 연결 (더 안정적)
         const scriptsSection = document.querySelector('.sidebar-scripts-section');
         if (scriptsSection && this.sidebarResizeObserver) {
             this.sidebarResizeObserver.observe(scriptsSection);
         }
+    }
+
+    /**
+     * 스크립트 추가/삭제 후 목록 갱신 (페이지네이션 유지)
+     * 스크립트가 추가되거나 삭제된 후 호출되며, 현재 페이지 상태를 최대한 유지
+     */
+    refreshScriptsList() {
+        // 페이지당 항목 수 재계산 (화면 크기 변경 가능성)
+        this.updateItemsPerPage();
+
+        // 현재 페이지의 유효성 검증 및 조정
+        this.adjustCurrentPageAfterChange();
+
+        // 현재 페이지 렌더링
+        this.renderScriptsPage();
+        this.updatePagination();
+    }
+
+    /**
+     * 스크립트 변경 후 현재 페이지 유효성 검증 및 조정
+     * 삭제로 인해 현재 페이지가 비게 되는 경우를 처리
+     */
+    adjustCurrentPageAfterChange() {
+        const totalPages = Math.max(1, Math.ceil(this.sidebarManager.scripts.length / this.itemsPerPage));
+
+        // 전체 페이지 수를 초과하는 경우 마지막 페이지로 이동
+        if (this.currentPage > totalPages) {
+            this.currentPage = totalPages;
+            return;
+        }
+
+        // 현재 페이지의 스크립트 범위 계산
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = Math.min(startIndex + this.itemsPerPage, this.sidebarManager.scripts.length);
+
+        // 현재 페이지에 스크립트가 하나도 없으면 이전 페이지로 이동
+        if (startIndex >= this.sidebarManager.scripts.length && this.currentPage > 1) {
+            this.currentPage--;
+            // 재귀적으로 다시 검증 (연속된 빈 페이지 처리)
+            this.adjustCurrentPageAfterChange();
+        }
+    }
+
+    /**
+     * 새 스크립트 추가 후 목록 갱신 (새 스크립트가 보이도록 페이지 이동)
+     * @param {boolean} addedToFront - 스크립트가 맨 앞에 추가되었는지 여부
+     */
+    refreshScriptsListAfterAdd(addedToFront = true) {
+        // 먼저 현재 페이지를 렌더링해서 DOM을 업데이트
+        this.renderScriptsPage();
+
+        // 페이지당 항목 수 재계산 (렌더링된 요소를 기준으로)
+        this.updateItemsPerPage();
+
+        if (addedToFront) {
+            // 맨 앞에 추가된 경우 첫 페이지로 이동
+            this.currentPage = 1;
+        } else {
+            // 맨 뒤에 추가된 경우 마지막 페이지로 이동
+            const totalPages = Math.max(1, Math.ceil(this.sidebarManager.scripts.length / this.itemsPerPage));
+            this.currentPage = totalPages;
+        }
+
+        // 최종 페이지 렌더링 및 네비게이션 업데이트
+        this.renderScriptsPage();
+        this.updatePagination();
     }
 
     /**
@@ -125,37 +204,56 @@ export class SidebarUIManager {
         // CSS 스타일링, 브라우저 렌더링, 서브픽셀 계산 등의 오차를 보정하기 위해
         // 191px(약 2.7개 아이템 높이)만큼 추가하여 공간을 확보합니다.
         // 이 값은 실제 테스트를 통해 스크립트가 꽉 차게 표시되도록 조정된 경험적 보정값입니다.
-        this.itemsPerPage = Math.max(1, Math.floor((availableHeight + 191) / estimatedHeight));
+        this.itemsPerPage = Math.max(1, Math.floor((availableHeight + 100) / estimatedHeight));
     }
 
     /**
      * 사이드바 항목 높이를 실제 스타일로 측정
+     * 이미 렌더링된 요소가 있으면 복제해서 사용, 없으면 더미 HTML 생성
      */
     measureSidebarItemHeight(container, width) {
-        const dummy = document.createElement('div');
-        dummy.className = 'script-item';
-        dummy.style.position = 'absolute';
-        dummy.style.visibility = 'hidden';
-        dummy.style.pointerEvents = 'none';
-        dummy.style.left = '-9999px';
-        dummy.style.top = '0';
-        dummy.style.width = `${width}px`;
-        dummy.style.boxSizing = 'border-box';
-        dummy.innerHTML = `
-            <div class="script-drag-handle">⋮⋮</div>
-            <div class="script-icon">📄</div>
-            <div class="script-info">
-                <div class="script-name">테스트 제목</div>
-                <div class="script-desc">설명 테스트</div>
-                <div class="script-date">
-                    <span class="date-icon">🕐</span>
-                    <span class="date-text">2026-01-01</span>
+        // 이미 렌더링된 요소가 있는지 확인
+        const existingItem = container.querySelector('.script-item');
+        let dummy;
+
+        if (existingItem) {
+            // 기존 요소를 복제해서 사용 (더 정확한 측정)
+            dummy = existingItem.cloneNode(true);
+            dummy.style.position = 'absolute';
+            dummy.style.visibility = 'hidden';
+            dummy.style.pointerEvents = 'none';
+            dummy.style.left = '-9999px';
+            dummy.style.top = '0';
+            dummy.style.width = `${width}px`;
+            dummy.style.boxSizing = 'border-box';
+        } else {
+            // 기존 요소가 없으면 더미 HTML 생성 (폴백)
+            dummy = document.createElement('div');
+            dummy.className = 'script-item';
+            dummy.style.position = 'absolute';
+            dummy.style.visibility = 'hidden';
+            dummy.style.pointerEvents = 'none';
+            dummy.style.left = '-9999px';
+            dummy.style.top = '0';
+            dummy.style.width = `${width}px`;
+            dummy.style.boxSizing = 'border-box';
+            dummy.innerHTML = `
+                <div class="script-drag-handle">⋮⋮</div>
+                <div class="script-icon">📄</div>
+                <div class="script-info">
+                    <div class="script-name">테스트 제목</div>
+                    <div class="script-desc">설명 테스트</div>
+                    <div class="script-date">
+                        <span class="date-icon">🕐</span>
+                        <span class="date-text">2026-01-01</span>
+                    </div>
                 </div>
-            </div>
-            <button class="script-delete-btn" title="스크립트 삭제">
-                <span class="delete-icon">🗑️</span>
-            </button>
-        `;
+                <button class="script-delete-btn" title="스크립트 삭제">
+                    <span class="delete-icon">🗑️</span>
+                </button>
+            `;
+        }
+
         container.appendChild(dummy);
         const height = dummy.getBoundingClientRect().height;
         container.removeChild(dummy);
