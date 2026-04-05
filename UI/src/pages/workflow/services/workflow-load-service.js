@@ -1,6 +1,11 @@
 /**
  * 워크플로우 로드 서비스
  * 서버에서 워크플로우 데이터를 가져와 화면에 표시하는 로직을 담당합니다.
+ *
+ * [빠른 스크립트 전환 시 주의]
+ * - load(): 진행 중인 _performLoad가 있으면 Promise를 끝까지 await한 뒤 다음 로드를 시작한다.
+ * - _performLoad(): _lastLoadedScriptId·Undo 전환은 렌더 완료 후 commitSuccessfulLoad에서만 반영한다.
+ * - renderNodes(): rAF/setTimeout 콜백마다 취소(loadId)를 검사해, 취소된 로드의 지연 작업이 빈 캔버스를 건드리지 않게 한다.
  */
 
 import { TIMING_CONSTANTS } from '../constants/timing-constants.js';
@@ -67,30 +72,18 @@ export class WorkflowLoadService {
             return;
         }
 
-        // 현재 로딩 중이면 이전 로드 취소하고 새 로드 시작
-        if (this.isLoading && this._currentLoadPromise && this._currentLoadId) {
-            log('[WorkflowLoadService] 기존 로드 취소하고 새 로드 시작');
-            // 이전 로드를 취소 표시
-            this._cancelledLoadIds.add(this._currentLoadId);
-            const previousLoadId = this._currentLoadId;
-
-            // 노드 제거가 완료되도록 기존 노드 강제 제거
-            const nodeManager = this.workflowPage.getNodeManager();
-            if (nodeManager) {
-                log('[WorkflowLoadService] 취소된 로드의 노드 제거 시작');
-                await this.clearExistingNodes(nodeManager);
-            }
-
-            // 이전 로드가 완료될 때까지 짧게 대기
+        // 결론: 새 로드 전에 반드시 이전 _performLoad Promise를 await로 끝까지 기다린다.
+        // 이유: 예전에는 100ms만 기다리고 넘어가 renderNodes 안의 setTimeout이 늦게 실행되며
+        //       이미 비워진 캔버스에 연결선을 그리거나 노드가 사라진 것처럼 보이는 현상이 있었다.
+        const oldPromise = this._currentLoadPromise;
+        const oldLoadId = this._currentLoadId;
+        if (oldPromise && oldLoadId) {
+            log('[WorkflowLoadService] 진행 중 로드 취소 표시 후 완료 대기:', oldLoadId);
+            this._cancelledLoadIds.add(oldLoadId);
             try {
-                await Promise.race([this._currentLoadPromise, new Promise((resolve) => setTimeout(resolve, 100))]);
-            } catch (error) {
-                // 에러는 무시 (취소된 로드의 에러)
-            }
-
-            // 취소된 로드 ID 정리 (오래된 것만)
-            if (this._cancelledLoadIds.size > 10) {
-                this._cancelledLoadIds.clear();
+                await oldPromise;
+            } catch {
+                /* 취소·실패한 로드의 예외는 상위 흐름을 막지 않음 */
             }
         }
 
@@ -128,7 +121,11 @@ export class WorkflowLoadService {
     }
 
     /**
-     * 실제 로드 수행
+     * 실제 로드 수행 (노드 제거 → API → renderNodes → 연결 복원)
+     *
+     * 바깥 try/finally: 조기 return이 나와도 isLoading·로딩 오버레이를 반드시 정리한다.
+     * (이전에는 return 경로가 finally를 타지 않아 로딩 상태가 꼬일 수 있었다.)
+     *
      * @param {Object} script - 스크립트 정보
      * @param {boolean} forceReload - 강제 재로드 여부
      * @param {string} loadId - 로드 ID (취소 확인용)
@@ -138,138 +135,156 @@ export class WorkflowLoadService {
         const log = logger.log;
         const logError = logger.error;
 
-        // 로드가 취소되었는지 확인
-        if (this._cancelledLoadIds.has(loadId)) {
-            log('[WorkflowLoadService] 로드가 취소되었습니다:', loadId);
-            return;
-        }
-
-        // 노드 로딩 오버레이 표시
-        if (this.workflowPage && typeof this.workflowPage.showNodeLoading === 'function') {
-            this.workflowPage.showNodeLoading();
-        }
-
-        // 1. 연결선 매니저 초기화 확인
-        this.workflowPage.ensureConnectionManagerInitialized();
-
-        const nodeManager = this.workflowPage.getNodeManager();
-
-        // 2. 기존 노드들 제거 (스크립트 전환 시)
-        // 같은 스크립트를 다시 로드하는 경우가 아니면 기존 노드 제거
-        // previousScriptId: 이전에 로드한 스크립트 ID (스크립트 변경 여부 확인용)
-        const previousScriptId = this._lastLoadedScriptId;
-
-        // 로드가 취소되었는지 확인
-        if (this._cancelledLoadIds.has(loadId)) {
-            log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 전):', loadId);
-            return;
-        }
-
-        // 이전 스크립트가 있고 다른 스크립트로 변경하는 경우
-        if (previousScriptId && previousScriptId !== script.id) {
-            log('[WorkflowLoadService] 기존 노드 제거 시작 (스크립트 변경)');
-            await this.clearExistingNodes(nodeManager);
-        } else if (!previousScriptId) {
-            // 첫 로드인 경우 (이전 스크립트가 없음)
-            log('[WorkflowLoadService] 첫 로드이므로 기존 노드 제거 건너뜀');
-        } else {
-            // 같은 스크립트를 다시 로드하는 경우 (강제 재로드)
-            if (forceReload) {
-                log('[WorkflowLoadService] 강제 재로드: 기존 노드 제거');
-                await this.clearExistingNodes(nodeManager);
-            } else {
-                log('[WorkflowLoadService] 같은 스크립트이므로 기존 노드 제거 건너뜀');
-            }
-        }
-
-        // 로드가 취소되었는지 다시 확인 (노드 제거 후)
-        if (this._cancelledLoadIds.has(loadId)) {
-            log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 후):', loadId);
-            return;
-        }
-
-        // 스크립트 ID 저장 (노드 제거 후에 저장)
-        this._lastLoadedScriptId = script.id;
-
-        // Undo/Redo 서비스에 스크립트 전환 알림
-        const undoRedoService = this.workflowPage?.getUndoRedoService?.();
-        if (undoRedoService && script.id) {
-            undoRedoService.switchScript(script.id);
-        }
-
         try {
-            // 로드가 취소되었는지 확인 (서버 요청 전)
+            // 로드가 취소되었는지 확인
             if (this._cancelledLoadIds.has(loadId)) {
-                log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 요청 전):', loadId);
+                log('[WorkflowLoadService] 로드가 취소되었습니다:', loadId);
                 return;
             }
 
-            if (ScriptAPI && script.id) {
-                const response = await ScriptAPI.getScript(script.id);
+            // 노드 로딩 오버레이 표시
+            if (this.workflowPage && typeof this.workflowPage.showNodeLoading === 'function') {
+                this.workflowPage.showNodeLoading();
+            }
 
-                // 로드가 취소되었는지 확인 (서버 응답 후)
+            // 1. 연결선 매니저 초기화 확인
+            this.workflowPage.ensureConnectionManagerInitialized();
+
+            const nodeManager = this.workflowPage.getNodeManager();
+
+            // 2. 기존 노드들 제거 (스크립트 전환 시)
+            // 같은 스크립트를 다시 로드하는 경우가 아니면 기존 노드 제거
+            // previousScriptId: 이전에 로드한 스크립트 ID (스크립트 변경 여부 확인용)
+            const previousScriptId = this._lastLoadedScriptId;
+
+            // 로드가 취소되었는지 확인
+            if (this._cancelledLoadIds.has(loadId)) {
+                log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 전):', loadId);
+                return;
+            }
+
+            // 이전 스크립트가 있고 다른 스크립트로 변경하는 경우
+            if (previousScriptId && previousScriptId !== script.id) {
+                log('[WorkflowLoadService] 기존 노드 제거 시작 (스크립트 변경)');
+                await this.clearExistingNodes(nodeManager);
+            } else if (!previousScriptId) {
+                // 첫 로드인 경우 (이전 스크립트가 없음)
+                log('[WorkflowLoadService] 첫 로드이므로 기존 노드 제거 건너뜀');
+            } else {
+                // 같은 스크립트를 다시 로드하는 경우 (강제 재로드)
+                if (forceReload) {
+                    log('[WorkflowLoadService] 강제 재로드: 기존 노드 제거');
+                    await this.clearExistingNodes(nodeManager);
+                } else {
+                    log('[WorkflowLoadService] 같은 스크립트이므로 기존 노드 제거 건너뜀');
+                }
+            }
+
+            // 로드가 취소되었는지 다시 확인 (노드 제거 후)
+            if (this._cancelledLoadIds.has(loadId)) {
+                log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 제거 후):', loadId);
+                return;
+            }
+
+            // commitSuccessfulLoad: 결론 — 화면에 그림이 완전히 반영된 뒤에만 "현재 스크립트 ID"를 확정한다.
+            // 이유 — 예전에는 fetch 직전에 _lastLoadedScriptId를 바꿔, 취소/실패 시에도 이미 로드된 것처럼 보이거나 저장 대상이 어긋날 수 있었다.
+            // 위치 — inner try/catch 양쪽에서 호출하므로 함수로 바깥(현재 블록)에 둔다.
+            const commitSuccessfulLoad = () => {
                 if (this._cancelledLoadIds.has(loadId)) {
-                    log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 응답 후):', loadId);
+                    return;
+                }
+                this._lastLoadedScriptId = script.id;
+                const undoRedoService = this.workflowPage?.getUndoRedoService?.();
+                if (undoRedoService && script.id) {
+                    undoRedoService.switchScript(script.id);
+                }
+            };
+
+            try {
+                // 로드가 취소되었는지 확인 (서버 요청 전)
+                if (this._cancelledLoadIds.has(loadId)) {
+                    log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 요청 전):', loadId);
                     return;
                 }
 
-                log('[WorkflowPage] ✅ 서버에서 스크립트 정보 받음:', response);
+                if (ScriptAPI && script.id) {
+                    const response = await ScriptAPI.getScript(script.id);
 
-                const nodes = response.nodes || [];
-                // 서버에서 connections 배열을 직접 받거나, 없으면 노드의 connected_to에서 생성
-                let connections = response.connections || [];
-
-                // connections가 없으면 노드의 connected_to에서 생성 (하위 호환성)
-                if (connections.length === 0) {
-                    connections = this.buildConnectionsFromNodes(nodes);
-                }
-
-                log(`[WorkflowPage] 서버에서 받은 노드 개수: ${nodes.length}개`);
-                log(`[WorkflowPage] 연결 개수: ${connections.length}개`);
-                log('[WorkflowPage] 연결 정보:', connections);
-
-                // 노드가 있으면 화면에 렌더링
-                if (nodes.length > 0) {
-                    // 서버에서 불러온 노드에 경계 노드가 포함되어 있는지 확인
-                    // hasBoundaryNode: 경계 노드가 포함되어 있는지 여부
-                    const { isBoundaryNodeSync } = await import('../constants/node-types.js');
-                    const hasBoundaryNode = nodes.some((n) => {
-                        const nodeType = n.type || (n.id === 'start' ? 'start' : null);
-                        return nodeType && isBoundaryNodeSync(nodeType);
-                    });
-
-                    log(`[WorkflowPage] 서버 노드 확인 - 경계 노드: ${hasBoundaryNode}`);
-
-                    // 로드가 취소되었는지 확인 (노드 렌더링 전)
+                    // 로드가 취소되었는지 확인 (서버 응답 후)
                     if (this._cancelledLoadIds.has(loadId)) {
-                        log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 렌더링 전):', loadId);
+                        log('[WorkflowLoadService] 로드가 취소되었습니다 (서버 응답 후):', loadId);
                         return;
                     }
 
-                    // 노드들을 화면에 렌더링
-                    await this.renderNodes(nodes, connections, nodeManager, loadId);
+                    log('[WorkflowPage] ✅ 서버에서 스크립트 정보 받음:', response);
+
+                    const nodes = response.nodes || [];
+                    // 서버에서 connections 배열을 직접 받거나, 없으면 노드의 connected_to에서 생성
+                    let connections = response.connections || [];
+
+                    // connections가 없으면 노드의 connected_to에서 생성 (하위 호환성)
+                    if (connections.length === 0) {
+                        connections = this.buildConnectionsFromNodes(nodes);
+                    }
+
+                    log(`[WorkflowPage] 서버에서 받은 노드 개수: ${nodes.length}개`);
+                    log(`[WorkflowPage] 연결 개수: ${connections.length}개`);
+                    log('[WorkflowPage] 연결 정보:', connections);
+
+                    // 노드가 있으면 화면에 렌더링
+                    if (nodes.length > 0) {
+                        // 서버에서 불러온 노드에 경계 노드가 포함되어 있는지 확인
+                        // hasBoundaryNode: 경계 노드가 포함되어 있는지 여부
+                        const { isBoundaryNodeSync } = await import('../constants/node-types.js');
+                        const hasBoundaryNode = nodes.some((n) => {
+                            const nodeType = n.type || (n.id === 'start' ? 'start' : null);
+                            return nodeType && isBoundaryNodeSync(nodeType);
+                        });
+
+                        log(`[WorkflowPage] 서버 노드 확인 - 경계 노드: ${hasBoundaryNode}`);
+
+                        // 로드가 취소되었는지 확인 (노드 렌더링 전)
+                        if (this._cancelledLoadIds.has(loadId)) {
+                            log('[WorkflowLoadService] 로드가 취소되었습니다 (노드 렌더링 전):', loadId);
+                            return;
+                        }
+
+                        // 노드들을 화면에 렌더링
+                        await this.renderNodes(nodes, connections, nodeManager, loadId);
+                        if (!this._cancelledLoadIds.has(loadId)) {
+                            commitSuccessfulLoad();
+                        }
+                    } else {
+                        // 노드가 없을 때만 기본 시작 노드 생성
+                        log('[WorkflowPage] 노드가 없어 기본 시작 노드 생성');
+                        await this.workflowPage.createDefaultBoundaryNodes();
+                        if (!this._cancelledLoadIds.has(loadId)) {
+                            commitSuccessfulLoad();
+                        }
+                    }
                 } else {
-                    // 노드가 없을 때만 기본 시작 노드 생성
-                    log('[WorkflowPage] 노드가 없어 기본 시작 노드 생성');
+                    logError('[WorkflowPage] ⚠️ ScriptAPI를 사용할 수 없거나 script.id가 없습니다.');
                     await this.workflowPage.createDefaultBoundaryNodes();
+                    if (!this._cancelledLoadIds.has(loadId)) {
+                        commitSuccessfulLoad();
+                    }
                 }
-            } else {
-                logError('[WorkflowPage] ⚠️ ScriptAPI를 사용할 수 없거나 script.id가 없습니다.');
+            } catch (error) {
+                logError('[WorkflowPage] ❌ 노드 데이터 로드 실패:', error);
                 await this.workflowPage.createDefaultBoundaryNodes();
+                if (!this._cancelledLoadIds.has(loadId)) {
+                    commitSuccessfulLoad();
+                }
             }
-        } catch (error) {
-            logError('[WorkflowPage] ❌ 노드 데이터 로드 실패:', error);
-            await this.workflowPage.createDefaultBoundaryNodes();
         } finally {
-            // 로딩 완료
-            this.isLoading = false;
-
-            // 노드 로딩 오버레이 숨김
-            if (this.workflowPage && typeof this.workflowPage.hideNodeLoading === 'function') {
-                this.workflowPage.hideNodeLoading();
+            // 결론: 이 loadId가 아직 load()에서 등록된 "현재 로드"일 때만 isLoading·오버레이를 내린다.
+            // 이유: 더 새 로드가 시작되면 _currentLoadId가 바뀌므로, 끝난 예전 작업이 새 로드 상태를 건드리면 안 된다.
+            if (this._currentLoadId === loadId) {
+                this.isLoading = false;
+                if (this.workflowPage && typeof this.workflowPage.hideNodeLoading === 'function') {
+                    this.workflowPage.hideNodeLoading();
+                }
             }
-
-            // 스크립트 ID는 유지 (같은 스크립트 중복 로드 방지)
         }
     }
 
@@ -597,19 +612,29 @@ export class WorkflowLoadService {
 
         log('[WorkflowPage] 모든 노드 생성 완료');
 
-        // 노드가 DOM에 완전히 렌더링되고 위치가 설정될 때까지 대기
-        // (createNodeFromServerData에서 이미 각 노드가 DOM에 추가될 때까지 대기했으므로, 여기서는 짧게 대기)
+        // rAF + 이중 setTimeout(100ms, 150ms) 동안 사용자가 다른 스크립트로 바꾸면 이 로드는 취소(loadId)된다.
+        // 결론: 각 비동기 구간 직후 취소 여부를 검사해, 취소된 로드는 restoreConnections·fit·update를 실행하지 않는다.
+        // 이유: 취소 후 캔버스가 비었는데 예전 타이머가 연결선을 그리면 화면이 깨져 보인다.
         await new Promise((resolve) => {
-            // 노드 생성이 완료되었으므로 짧은 대기 후 연결 복원 및 뷰포트 조정
             requestAnimationFrame(() => {
+                if (loadId && this._cancelledLoadIds.has(loadId)) {
+                    resolve();
+                    return;
+                }
                 this.restoreConnections(filteredConnections, nodeManager);
 
-                // 뷰포트 조정 전에 한 번 더 대기 (노드 위치가 완전히 적용될 때까지)
                 setTimeout(() => {
+                    if (loadId && this._cancelledLoadIds.has(loadId)) {
+                        resolve();
+                        return;
+                    }
                     this.workflowPage.fitNodesToView();
 
-                    // 뷰포트 조정 후 연결선 위치를 다시 한 번 업데이트
                     setTimeout(() => {
+                        if (loadId && this._cancelledLoadIds.has(loadId)) {
+                            resolve();
+                            return;
+                        }
                         if (nodeManager && nodeManager.connectionManager && filteredConnections.length > 0) {
                             log('[WorkflowPage] 뷰포트 조정 후 연결선 위치 최종 업데이트');
                             nodeManager.connectionManager.updateAllConnections();

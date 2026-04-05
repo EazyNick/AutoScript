@@ -65,7 +65,8 @@ export class PageRouter {
         this.setupNavigation();
         this.updateSidebarMenu(); // 초기 사이드바 메뉴 번역 적용
         this.updateHeaderAndProfile(); // 초기 헤더 및 프로필 번역 적용
-        this.showPage(this.currentPage);
+        // showPage 안에서 "에디터 떠날 때 저장"이 await 되므로, 여기서도 await 해야 첫 화면이 올바른 순서로 뜸
+        await this.showPage(this.currentPage);
     }
 
     /**
@@ -77,18 +78,52 @@ export class PageRouter {
             item.addEventListener('click', () => {
                 const page = item.dataset.page;
                 if (page) {
-                    this.showPage(page);
+                    // showPage는 async 함수라 Promise를 반환함. 클릭 핸들러에서 await 안 쓰려면 void로 "실행만" 함.
+                    // 내부에서는 에디터 이탈 시 저장이 끝난 다음 화면이 바뀜.
+                    void this.showPage(page);
                 }
             });
         });
     }
 
     /**
-     * 페이지 표시
+     * 스크립트 편집 화면(editor)을 떠나기 직전, 지금 캔버스에 있는 노드·연결을 서버(DB)에 맞춰 둡니다.
+     *
+     * 왜 필요한가?
+     * - 사용자가 나중에 다시 "스크립트" 메뉴로 들어오면, 프로그램이 서버에서 데이터를 다시 받아 화면을 그림.
+     * - 서버에 최신이 안 올라가 있으면, 아까 편집한 연결선·위치가 사라진 것처럼 보일 수 있음.
      */
-    showPage(pageName) {
+    async persistEditorWorkflowBeforeLeave(logger) {
+        const wp = window.workflowPage;
+        if (!wp || typeof wp.persistWorkflowToServerSilently !== 'function') {
+            return;
+        }
+        const script = wp.getCurrentScript?.();
+        if (!script?.id) {
+            return;
+        }
+        try {
+            logger.log('[PageRouter] 에디터 이탈 자동 저장');
+            await wp.persistWorkflowToServerSilently();
+        } catch (e) {
+            logger.warn('[PageRouter] 에디터 이탈 자동 저장 실패:', e);
+        }
+    }
+
+    /**
+     * 상단 메뉴로 보여 줄 페이지를 바꿉니다.
+     *
+     * async인 이유: editor에서 나갈 때 "저장이 끝난 뒤"에만 화면을 바꾸기 위해 await를 씁니다.
+     * (저장이 느리면 그만큼 전환이 잠깐 늦어질 수 있음 — 대신 데이터 유실을 줄임)
+     */
+    async showPage(pageName) {
         const logger = getLogger();
         logger.log('[PageRouter] 페이지 전환:', pageName);
+
+        // "스크립트 편집"에서 "대시보드/실행기록/설정" 등으로 갈 때만 먼저 저장
+        if (this.currentPage === 'editor' && pageName !== 'editor') {
+            await this.persistEditorWorkflowBeforeLeave(logger);
+        }
 
         // 모달 닫기 (페이지 전환 시 열려있는 모달 닫기)
         const modalManager = getModalManagerInstance();

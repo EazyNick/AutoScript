@@ -14,25 +14,41 @@ export class WorkflowSaveService {
 
     /**
      * 워크플로우 저장
+     *
+     * 보통은 "지금 사이드바에서 골라진 스크립트"와 "화면에 그려진 스크립트"가 같지만,
+     * 스크립트를 바꾸는 순간에는 사이드바만 먼저 바뀌고 캔버스는 아직 예전 스크립트일 수 있습니다.
+     * 그때는 options.scriptId로 "이 번호 스크립트에 저장해라"라고 명시해 줍니다.
+     *
      * @param {Object} options - 저장 옵션
-     * @param {boolean} options.useToast - Toast 알림 사용 여부
-     * @param {boolean} options.showAlert - 팝업 알림 표시 여부 (기본값: true)
+     * @param {boolean} options.useToast - true면 토스트로 성공/실패 알림
+     * @param {boolean} options.showAlert - true면 저장 버튼처럼 팝업 알림 (자동 저장은 보통 false)
+     * @param {number|string} [options.scriptId] - (선택) 저장할 스크립트 ID를 강제 지정. 스크립트 전환 직전 저장에 사용
      */
     async save(options = {}) {
         const sidebarManager = this.workflowPage.getSidebarManager();
         const loadService = this.workflowPage.getLoadService();
 
-        // 마지막으로 로드한 스크립트 ID를 우선 사용 (Undo/Redo 후 올바른 스크립트 저장 보장)
+        // 화면에 실제로 열려 있던 스크립트 ID (Undo/Redo 등으로 선택과 어긋날 때 보정용)
         const lastLoadedScriptId = loadService ? loadService.getLastLoadedScriptId() : null;
+        // 사이드바에서 "지금 선택된" 스크립트 정보
         let currentScript = sidebarManager ? sidebarManager.getCurrentScript() : null;
 
-        // _lastLoadedScriptId가 있으면 우선 사용
-        if (lastLoadedScriptId && currentScript && currentScript.id !== lastLoadedScriptId) {
+        // 호출자가 "이 ID로 저장해"라고 넘긴 경우 → 그걸 최우선 (스크립트 바꾸는 직전에 예전 스크립트 내용을 서버에 남길 때)
+        const explicitScriptId = options.scriptId != null ? options.scriptId : null;
+
+        if (explicitScriptId != null) {
+            const logger = this.workflowPage.getLogger();
+            logger.log(
+                `[WorkflowSaveService] options.scriptId(${explicitScriptId})로 저장 대상 고정 (스크립트 전환 직전 캔버스 반영)`
+            );
+            // 이름·설명 등은 현재 선택 스크립트에서 복사하되, 저장 대상 ID만 explicitScriptId로 고정
+            currentScript = currentScript ? { ...currentScript, id: explicitScriptId } : { id: explicitScriptId };
+        } else if (lastLoadedScriptId && currentScript && currentScript.id !== lastLoadedScriptId) {
+            // scriptId 옵션이 없을 때: 선택은 B인데 화면은 아직 A였다면 → A에 저장해야 함
             const logger = this.workflowPage.getLogger();
             logger.log(
                 `[WorkflowSaveService] 마지막 로드한 스크립트 ID(${lastLoadedScriptId})를 사용합니다. 현재 선택된 스크립트 ID(${currentScript.id}) 대신.`
             );
-            // currentScript를 lastLoadedScriptId에 맞게 업데이트
             currentScript = { ...currentScript, id: lastLoadedScriptId };
         }
 
@@ -62,6 +78,7 @@ export class WorkflowSaveService {
             const nodeAPI = this.workflowPage.getNodeAPI();
             if (nodeAPI) {
                 const logger = this.workflowPage.getLogger();
+                // 위에서 정한 currentScript.id가 실제 API 경로 /api/scripts/{id}/nodes 에 들어감
                 const scriptIdToSave = currentScript.id;
                 logger.log('[WorkflowSaveService] 저장 요청 시작:', {
                     scriptId: scriptIdToSave,
