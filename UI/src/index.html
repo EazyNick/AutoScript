@@ -136,6 +136,20 @@
                     <div class="script-list">
                         <!-- 스크립트 목록은 sidebar.js에서 동적으로 생성됩니다 -->
                     </div>
+
+                    <!--
+                        페이지 네비게이션: 스크립트 목록 페이징 컨트롤
+                        - 스크립트가 많을 때 목록을 페이지별로 나누어 표시
+                        - 한 페이지에 10개 스크립트씩 표시 (sidebar-ui.js에서 설정)
+                        - 이전/다음 버튼으로 페이지 이동
+                        - 현재 페이지 / 전체 페이지 수 표시
+                        - 사이드바 최하단에 항상 고정되어 있어 스크롤 시에도 보임
+                    -->
+                    <div class="script-pagination" id="script-pagination">
+                        <button class="pagination-btn" id="prev-page-btn" disabled>&lt;</button>
+                        <span class="pagination-info" id="pagination-info">1 / 1</span>
+                        <button class="pagination-btn" id="next-page-btn" disabled>&gt;</button>
+                    </div>
                 </div>
 
                 <!-- 사이드바 리사이즈 핸들: 경계선을 드래그하여 사이드바 크기 조절 -->
@@ -191,6 +205,20 @@
                             <h2 class="section-title">스크립트</h2>
                             <div class="scripts-grid" id="dashboard-scripts-grid">
                                 <!-- 스크립트 카드들이 동적으로 생성됩니다 -->
+                            </div>
+
+                            <!--
+                                대시보드 페이지 네비게이션: 대시보드 스크립트 그리드 페이징 컨트롤
+                                - 대시보드에서 스크립트 카드가 많을 때 그리드를 페이지별로 나누어 표시
+                                - 한 페이지에 12개 스크립트 카드씩 표시 (dashboard.js에서 설정)
+                                - 이전/다음 버튼으로 페이지 이동
+                                - 현재 페이지 / 전체 페이지 수 표시
+                                - 스크롤 가능한 영역 내에서 위치 고정
+                            -->
+                            <div class="dashboard-pagination" id="dashboard-pagination">
+                                <button class="pagination-btn" id="dashboard-prev-page-btn" disabled>&lt;</button>
+                                <span class="pagination-info" id="dashboard-pagination-info">1 / 1</span>
+                                <button class="pagination-btn" id="dashboard-next-page-btn" disabled>&gt;</button>
                             </div>
                         </div>
                     </div>

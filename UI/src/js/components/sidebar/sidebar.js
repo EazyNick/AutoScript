@@ -90,6 +90,7 @@ export class SidebarManager {
 
     async init() {
         this.eventHandler.setupEventListeners();
+        this.uiManager.setupPaginationEvents(); // 페이지 네비게이션 이벤트 설정 (페이징 기능 활성화)
         await this.scriptManager.loadScriptsFromServer();
     }
 

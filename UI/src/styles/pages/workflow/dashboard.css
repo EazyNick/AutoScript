@@ -331,3 +331,69 @@
         gap: 20px;
     }
 }
+
+/* ========================================== */
+/* 대시보드 페이지 네비게이션 */
+/* ========================================== */
+
+/*
+    대시보드 페이지 네비게이션 컨테이너
+    - margin-top으로 스크립트 그리드와 간격 유지
+    - display: flex로 버튼과 정보를 수평 배치
+    - justify-content: center로 가운데 정렬
+    - border-radius와 border로 시각적 구분
+*/
+.dashboard-pagination {
+    margin-top: 20px;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    background-color: #2d3748;
+    border-radius: 8px;
+    border: 1px solid #4a5568;
+}
+
+/*
+    대시보드 페이지 네비게이션 버튼
+    - padding으로 터치 친화적 크기
+    - border-radius로 둥근 모서리
+    - transition으로 부드러운 호버 효과
+    - :disabled 상태에서 opacity로 비활성화 표시
+*/
+.dashboard-pagination .pagination-btn {
+    padding: 10px 16px;
+    background-color: #374151;
+    color: #a0aec0;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.dashboard-pagination .pagination-btn:hover:not(:disabled) {
+    background-color: #4b5563;
+    color: #ffffff;
+}
+
+.dashboard-pagination .pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/*
+    대시보드 페이지 정보 표시
+    - min-width로 텍스트 너비 고정
+    - text-align: center로 가운데 정렬
+    - font-weight로 강조 표시
+*/
+.dashboard-pagination .pagination-info {
+    color: #a0aec0;
+    font-size: 16px;
+    font-weight: 500;
+    min-width: 60px;
+    text-align: center;
+}

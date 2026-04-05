@@ -383,8 +383,16 @@ export class SidebarScriptManager {
             }
         }
 
-        // UI 업데이트
-        this.sidebarManager.uiManager.loadScripts();
+        // UI 업데이트: 현재 렌더링된 페이지 크기를 유지하고 클릭된 스크립트가 있는 페이지로 이동
+        if (this.sidebarManager.uiManager) {
+            const itemsPerPage = Math.max(1, this.sidebarManager.uiManager.itemsPerPage);
+            const totalPages = Math.max(1, Math.ceil(this.sidebarManager.scripts.length / itemsPerPage));
+            const targetPage = Math.floor(index / itemsPerPage) + 1;
+            this.sidebarManager.uiManager.currentPage = Math.min(Math.max(1, targetPage), totalPages);
+
+            this.sidebarManager.uiManager.renderScriptsPage();
+            this.sidebarManager.uiManager.updatePagination();
+        }
 
         // 헤더 업데이트
         this.sidebarManager.uiManager.updateHeader();

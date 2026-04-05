@@ -28,6 +28,11 @@ const getLogger = () => {
 export class DashboardManager {
     constructor() {
         this.scripts = [];
+        this.currentPage = 1; // 대시보드 스크립트 그리드의 현재 페이지
+        this.itemsPerPage = 12; // 초기값, 이후 화면 크기에 따라 동적 계산
+        this.minDashboardCardWidth = 320; // CSS minmax(320px, 1fr)와 일치
+        this.dashboardRowGap = 20; // CSS grid row-gap 값
+        this.dashboardResizeDebounce = null;
         this.executionStats = {
             totalScripts: 0,
             allExecutions: 0, // 전체 실행 시 실행된 스크립트 개수
@@ -40,6 +45,13 @@ export class DashboardManager {
 
     /**
      * 대시보드 초기화
+     *
+     * 초기화 과정:
+     * 1. 언어 설정 로드 및 적용
+     * 2. HTML 정적 텍스트 번역 적용
+     * 3. CSS 실행 중 텍스트 변수 설정
+     * 4. 페이지 네비게이션 이벤트 핸들러 설정 (페이징 기능 활성화)
+     * 5. 대시보드 데이터 로드 및 UI 렌더링
      */
     async init() {
         const logger = getLogger();
@@ -69,6 +81,15 @@ export class DashboardManager {
 
         // CSS 변수 업데이트 (실행 중 텍스트 번역)
         this.updateRunningTextCSS();
+
+        // 페이지 네비게이션 이벤트 설정 (페이징 기능 활성화)
+        this.setupDashboardPaginationEvents();
+
+        // 화면 크기 변경 및 브라우저 확대/축소(zoom) 시 재계산
+        window.addEventListener('resize', () => this.handleResize());
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => this.handleResize());
+        }
 
         await this.loadDashboardData();
         this.renderDashboard();
@@ -394,8 +415,104 @@ export class DashboardManager {
      * 대시보드 렌더링
      */
     renderDashboard() {
+        this.updateItemsPerPage();
+        const totalPages = Math.max(1, Math.ceil(this.scripts.length / this.itemsPerPage));
+        if (this.currentPage > totalPages) {
+            this.currentPage = totalPages;
+        }
         this.updateStats();
         this.renderScripts();
+    }
+
+    /**
+     * 화면 크기 변경 시 페이지당 표시 개수 재계산
+     *
+     * 리사이즈 이벤트가 빠르게 발생할 수 있기 때문에 debounce 처리합니다.
+     */
+    handleResize() {
+        if (this.dashboardResizeDebounce) {
+            clearTimeout(this.dashboardResizeDebounce);
+        }
+        this.dashboardResizeDebounce = window.setTimeout(() => {
+            const previousItemsPerPage = this.itemsPerPage;
+            this.updateItemsPerPage();
+            if (this.itemsPerPage !== previousItemsPerPage) {
+                this.currentPage = 1;
+                this.renderDashboard();
+            }
+        }, 100);
+    }
+
+    /**
+     * 페이지당 표시할 스크립트 개수를 화면 크기에 따라 계산
+     *
+     * 원리:
+     * 1. 현재 그리드 너비로 가능한 열 수를 계산
+     * 2. 카드 높이를 측정하여 가능 행 수를 계산
+     * 3. 행 수 × 열 수로 itemsPerPage를 결정
+     *
+     * 브라우저 확대/축소(zoom)도 반영됩니다.
+     * getBoundingClientRect()는 렌더된 레이아웃 크기를 기준으로 계산하므로,
+     * zoom 변화가 있으면 resize/visualViewport resize 이벤트로 재계산됩니다.
+     */
+    updateItemsPerPage() {
+        const scriptsGrid = document.getElementById('dashboard-scripts-grid');
+        const pagination = document.getElementById('dashboard-pagination');
+        if (!scriptsGrid) {
+            return;
+        }
+
+        const gridStyles = window.getComputedStyle(scriptsGrid);
+        const rowGap = parseFloat(gridStyles.rowGap) || this.dashboardRowGap;
+        const gridRect = scriptsGrid.getBoundingClientRect();
+
+        const paginationRect = pagination ? pagination.getBoundingClientRect() : null;
+        const paginationStyles = pagination ? window.getComputedStyle(pagination) : null;
+        const paginationMarginTop = paginationStyles ? parseFloat(paginationStyles.marginTop) || 0 : 0;
+
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        const paginationHeight = paginationRect ? paginationRect.height + paginationMarginTop : 0;
+        const availableHeight = Math.max(0, viewportHeight - gridRect.top - paginationHeight - 10);
+
+        if (availableHeight <= 0) {
+            return;
+        }
+
+        const columns = Math.max(1, Math.floor((gridRect.width + rowGap) / (this.minDashboardCardWidth + rowGap)));
+
+        const cardWidth = Math.max(0, (gridRect.width - rowGap * (columns - 1)) / columns);
+        const cardHeight = this.measureDashboardCardHeight(cardWidth);
+        if (cardHeight <= 0) {
+            return;
+        }
+
+        const rowHeight = cardHeight + rowGap;
+        const rows = Math.max(1, Math.floor((availableHeight + rowGap) / rowHeight));
+        this.itemsPerPage = rows * columns;
+    }
+
+    /**
+     * 스크립트 카드 높이를 실제 스타일로 측정
+     */
+    measureDashboardCardHeight(width) {
+        const dummyScript = {
+            id: -1,
+            name: '테스트 제목',
+            description: '설명 테스트 텍스트',
+            active: true,
+            last_executed_at: null
+        };
+        const dummyCard = this.createScriptCard(dummyScript);
+        dummyCard.style.position = 'absolute';
+        dummyCard.style.visibility = 'hidden';
+        dummyCard.style.left = '-9999px';
+        dummyCard.style.top = '-9999px';
+        dummyCard.style.width = `${width}px`;
+        document.body.appendChild(dummyCard);
+
+        const height = dummyCard.getBoundingClientRect().height;
+        document.body.removeChild(dummyCard);
+        return height;
     }
 
     /**
@@ -442,7 +559,14 @@ export class DashboardManager {
     }
 
     /**
-     * 스크립트 목록 렌더링
+     * 스크립트 목록 렌더링 (페이징 적용)
+     *
+     * 대시보드 페이징 알고리즘:
+     * 1. startIndex = (currentPage - 1) * itemsPerPage로 시작 인덱스 계산
+     * 2. endIndex = Math.min(startIndex + itemsPerPage, totalScripts)로 끝 인덱스 계산
+     * 3. scripts.slice(startIndex, endIndex)로 현재 페이지 스크립트 추출
+     * 4. 추출된 스크립트만 그리드에 렌더링
+     * 5. updateDashboardPagination()으로 페이지 네비게이션 상태 업데이트
      */
     renderScripts() {
         const scriptsGrid = document.getElementById('dashboard-scripts-grid');
@@ -457,13 +581,21 @@ export class DashboardManager {
             emptyMessage.className = 'empty-message';
             emptyMessage.textContent = t('dashboard.noScripts');
             scriptsGrid.appendChild(emptyMessage);
+            this.updateDashboardPagination();
             return;
         }
 
-        this.scripts.forEach((script) => {
+        // 현재 페이지의 스크립트 범위 계산
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = Math.min(startIndex + this.itemsPerPage, this.scripts.length);
+        const scriptsToShow = this.scripts.slice(startIndex, endIndex);
+
+        scriptsToShow.forEach((script) => {
             const scriptCard = this.createScriptCard(script);
             scriptsGrid.appendChild(scriptCard);
         });
+
+        this.updateDashboardPagination();
     }
 
     /**
@@ -817,6 +949,84 @@ export class DashboardManager {
         } catch (error) {
             logger.error('[Dashboard] ❌ 전체 실행 통계 초기화 실패:', error);
             throw error;
+        }
+    }
+    /**
+     * 대시보드 페이지 네비게이션 업데이트
+     *
+     * 원리:
+     * 1. 전체 스크립트 개수를 itemsPerPage(12개)로 나누어 총 페이지 수 계산
+     * 2. 현재 페이지 정보를 "현재페이지 / 전체페이지" 형식으로 표시
+     * 3. 이전 버튼: currentPage > 1일 때만 활성화
+     * 4. 다음 버튼: currentPage < totalPages일 때만 활성화
+     */
+    updateDashboardPagination() {
+        const totalPages = Math.ceil(this.scripts.length / this.itemsPerPage);
+        const paginationInfo = document.getElementById('dashboard-pagination-info');
+        const prevBtn = document.getElementById('dashboard-prev-page-btn');
+        const nextBtn = document.getElementById('dashboard-next-page-btn');
+
+        if (paginationInfo) {
+            paginationInfo.textContent = `${this.currentPage} / ${totalPages || 1}`;
+        }
+
+        if (prevBtn) {
+            prevBtn.disabled = this.currentPage <= 1;
+        }
+
+        if (nextBtn) {
+            nextBtn.disabled = this.currentPage >= totalPages;
+        }
+    }
+
+    /**
+     * 대시보드 다음 페이지로 이동
+     *
+     * 원리:
+     * 1. 총 페이지 수 계산
+     * 2. 현재 페이지가 총 페이지 수보다 작으면 currentPage 증가
+     * 3. renderScripts()로 새 페이지 렌더링
+     */
+    nextDashboardPage() {
+        const totalPages = Math.ceil(this.scripts.length / this.itemsPerPage);
+        if (this.currentPage < totalPages) {
+            this.currentPage++;
+            this.renderScripts();
+        }
+    }
+
+    /**
+     * 대시보드 이전 페이지로 이동
+     *
+     * 원리:
+     * 1. 현재 페이지가 1보다 크면 currentPage 감소
+     * 2. renderScripts()로 새 페이지 렌더링
+     */
+    prevDashboardPage() {
+        if (this.currentPage > 1) {
+            this.currentPage--;
+            this.renderScripts();
+        }
+    }
+
+    /**
+     * 대시보드 페이지 네비게이션 이벤트 핸들러 설정
+     *
+     * 원리:
+     * 1. 이전/다음 버튼 DOM 요소 찾기
+     * 2. 각 버튼에 클릭 이벤트 리스너 등록
+     * 3. 클릭 시 nextDashboardPage() 또는 prevDashboardPage() 호출
+     */
+    setupDashboardPaginationEvents() {
+        const prevBtn = document.getElementById('dashboard-prev-page-btn');
+        const nextBtn = document.getElementById('dashboard-next-page-btn');
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => this.prevDashboardPage());
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => this.nextDashboardPage());
         }
     }
 }
