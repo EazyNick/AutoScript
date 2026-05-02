@@ -42,94 +42,15 @@ export class SidebarUIManager {
      */
     loadScripts() {
         this.currentPage = 1; // 스크립트 로드 시 첫 페이지로 초기화
-
-        // 초기 로딩 시 안전한 기본값 사용 (UI 깜빡임 방지)
-        this.itemsPerPage = 10;
-
-        // 먼저 요소들을 렌더링
+        this.updateItemsPerPage();
         this.renderScriptsPage();
         this.updatePagination();
-
-        // DOM 레이아웃이 완전히 안정화된 후 정확한 높이 계산 및 재렌더링
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                this.updateItemsPerPage();
-                this.renderScriptsPage();
-                this.updatePagination();
-            });
-        });
 
         // ResizeObserver를 sidebar-scripts-section에 연결 (더 안정적)
         const scriptsSection = document.querySelector('.sidebar-scripts-section');
         if (scriptsSection && this.sidebarResizeObserver) {
             this.sidebarResizeObserver.observe(scriptsSection);
         }
-    }
-
-    /**
-     * 스크립트 추가/삭제 후 목록 갱신 (페이지네이션 유지)
-     * 스크립트가 추가되거나 삭제된 후 호출되며, 현재 페이지 상태를 최대한 유지
-     */
-    refreshScriptsList() {
-        // 페이지당 항목 수 재계산 (화면 크기 변경 가능성)
-        this.updateItemsPerPage();
-
-        // 현재 페이지의 유효성 검증 및 조정
-        this.adjustCurrentPageAfterChange();
-
-        // 현재 페이지 렌더링
-        this.renderScriptsPage();
-        this.updatePagination();
-    }
-
-    /**
-     * 스크립트 변경 후 현재 페이지 유효성 검증 및 조정
-     * 삭제로 인해 현재 페이지가 비게 되는 경우를 처리
-     */
-    adjustCurrentPageAfterChange() {
-        const totalPages = Math.max(1, Math.ceil(this.sidebarManager.scripts.length / this.itemsPerPage));
-
-        // 전체 페이지 수를 초과하는 경우 마지막 페이지로 이동
-        if (this.currentPage > totalPages) {
-            this.currentPage = totalPages;
-            return;
-        }
-
-        // 현재 페이지의 스크립트 범위 계산
-        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-        const endIndex = Math.min(startIndex + this.itemsPerPage, this.sidebarManager.scripts.length);
-
-        // 현재 페이지에 스크립트가 하나도 없으면 이전 페이지로 이동
-        if (startIndex >= this.sidebarManager.scripts.length && this.currentPage > 1) {
-            this.currentPage--;
-            // 재귀적으로 다시 검증 (연속된 빈 페이지 처리)
-            this.adjustCurrentPageAfterChange();
-        }
-    }
-
-    /**
-     * 새 스크립트 추가 후 목록 갱신 (새 스크립트가 보이도록 페이지 이동)
-     * @param {boolean} addedToFront - 스크립트가 맨 앞에 추가되었는지 여부
-     */
-    refreshScriptsListAfterAdd(addedToFront = true) {
-        // 먼저 현재 페이지를 렌더링해서 DOM을 업데이트
-        this.renderScriptsPage();
-
-        // 페이지당 항목 수 재계산 (렌더링된 요소를 기준으로)
-        this.updateItemsPerPage();
-
-        if (addedToFront) {
-            // 맨 앞에 추가된 경우 첫 페이지로 이동
-            this.currentPage = 1;
-        } else {
-            // 맨 뒤에 추가된 경우 마지막 페이지로 이동
-            const totalPages = Math.max(1, Math.ceil(this.sidebarManager.scripts.length / this.itemsPerPage));
-            this.currentPage = totalPages;
-        }
-
-        // 최종 페이지 렌더링 및 네비게이션 업데이트
-        this.renderScriptsPage();
-        this.updatePagination();
     }
 
     /**
